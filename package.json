@@ -1,7 +1,7 @@
 {
-  "name": "@crow-b3/npm-sdk-template",
+  "name": "@crow-b3/website-hook-sdk",
   "version": "0.0.1",
-  "description": "A ready-to-go TypeScript/JavaScript SDK package starter, with linting, testing, build & publish workflows included.",
+  "description": "A lightweight JavaScript/TypeScript SDK for capturing user interactions on web pages and sending them into the Crow-B3 analytics/data pipeline.",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
@@ -14,7 +14,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/CROW-B3/npm-sdk-template.git"
+    "url": "https://github.com/CROW-B3/website-hook-sdk.git"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
