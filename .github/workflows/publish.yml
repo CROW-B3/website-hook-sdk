@@ -65,8 +65,6 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
           scope: '@crow-b3'
       - uses: pnpm/action-setup@v4
-        with:
-          version: 8
       - run: pnpm install
       - run: pnpm build
       - run: pnpm publish --no-git-checks
