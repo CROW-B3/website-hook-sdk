@@ -24,6 +24,12 @@ pnpm lint
 pnpm format
 ```
 
+## Local Development
+
+```
+"@crow-b3/website-hook-sdk": "file:../website-hook-sdk"
+```
+
 ## License
 
 MIT
