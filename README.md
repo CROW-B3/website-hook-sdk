@@ -1,11 +1,17 @@
-# website-hook-sdk
+# npm-sdk-template
 
-A lightweight JavaScript/TypeScript SDK for capturing user interactions on web pages and sending them into the Crow-B3 analytics/data pipeline.
+A ready-to-go TypeScript/JavaScript SDK package starter, with linting, testing, build & publish workflows included.
 
 ## Installation
 
 ```bash
-pnpm install @crow-b3/website-hook-sdk
+pnpm install @crow-b3/npm-sdk-template
+```
+
+## Usage
+
+```typescript
+import {} from '@crow-b3/npm-sdk-template';
 ```
 
 ## Development
@@ -22,12 +28,6 @@ pnpm lint
 
 # Format code
 pnpm format
-```
-
-## Local Development
-
-```
-"@crow-b3/website-hook-sdk": "file:../website-hook-sdk"
 ```
 
 ## License
