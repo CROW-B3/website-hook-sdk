@@ -2,9 +2,11 @@ on:
   schedule:
     - cron: '0 0 1 * *'
   workflow_dispatch:
+
 permissions:
   contents: write
   pull-requests: write
+
 jobs:
   repo-sync:
     runs-on: ubuntu-latest
@@ -16,9 +18,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: true
+          token: ${{ secrets.GH_TOKEN }}
+          persist-credentials: false
 
       - name: actions-template-sync
         uses: AndreasAugustin/actions-template-sync@v2
         with:
+          git_user_name: Methika Fernando
+          git_user_email: methikafernando2006@gmail.com
+          source_gh_token: ${{ secrets.GH_TOKEN }}
+          target_gh_token: ${{ secrets.GH_TOKEN }}
           source_repo_path: CROW-B3/npm-sdk-template
