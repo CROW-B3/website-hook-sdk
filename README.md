@@ -5,7 +5,7 @@ A lightweight JavaScript/TypeScript SDK for capturing user interactions on web p
 ## Installation
 
 ```bash
-pnpm install @crow-b3/website-hook-sdk
+pnpm install @b3-crow/website-hook-sdk
 ```
 
 ## Development
@@ -27,7 +27,7 @@ pnpm format
 ## Local Development
 
 ```
-"@crow-b3/website-hook-sdk": "file:../website-hook-sdk"
+"@b3-crow/website-hook-sdk": "file:../website-hook-sdk"
 ```
 
 ## License
