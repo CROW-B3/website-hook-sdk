@@ -1,1 +1,1 @@
-export type HelloWorld = {};
+export interface HelloWorld {}
