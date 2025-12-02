@@ -8,7 +8,7 @@ export interface AutoCaptureConfig {
   /**
    * Interval in milliseconds for continuous screenshot capture
    * If set, screenshots will be captured repeatedly at this interval
-   * @default 1000 (1 second) - captures every second
+   * @default 100 (1 second) - captures every second
    */
   interval?: number;
 
