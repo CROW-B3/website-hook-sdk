@@ -39,5 +39,8 @@
     "*.{json,md,css,scss,html,yml,yaml}": [
       "prettier --write"
     ]
+  },
+  "dependencies": {
+    "html2canvas": "^1.4.1"
   }
 }
