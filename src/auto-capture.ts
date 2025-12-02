@@ -141,60 +141,107 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
         );
       }
 
-      // Use html2canvas-pro which supports modern CSS including oklab
-      const html2canvasOptions: any = {
-        useCORS: finalConfig.useCORS,
-        allowTaint: false,
-        backgroundColor: finalConfig.backgroundColor,
-        scale: finalConfig.scale,
-        logging: finalConfig.logging,
-        ignoreElements: (element: Element) => {
-          return element.tagName === 'SCRIPT';
-        },
-      };
-
-      // If viewportOnly is true, capture only the visible area
+      // If viewportOnly is true, capture only the visible area at current scroll position
       if (finalConfig.viewportOnly) {
-        html2canvasOptions.width = window.innerWidth;
-        html2canvasOptions.height = window.innerHeight;
-        html2canvasOptions.x = window.scrollX || window.pageXOffset;
-        html2canvasOptions.y = window.scrollY || window.pageYOffset;
-        html2canvasOptions.windowWidth = window.innerWidth;
-        html2canvasOptions.windowHeight = window.innerHeight;
+        // Get current scroll position
+        const scrollX = window.scrollX || window.pageXOffset || 0;
+        const scrollY = window.scrollY || window.pageYOffset || 0;
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
 
         if (finalConfig.logging) {
-          console.log('[AutoCapture] Capturing viewport only:', {
-            width: window.innerWidth,
-            height: window.innerHeight,
-            scrollX: window.scrollX || window.pageXOffset,
-            scrollY: window.scrollY || window.pageYOffset,
+          console.log(
+            '[AutoCapture] Capturing viewport at current scroll position:',
+            {
+              scrollX,
+              scrollY,
+              viewportWidth,
+              viewportHeight,
+            }
+          );
+        }
+
+        // Capture the documentElement (html tag) with viewport crop
+        const canvas = await html2canvas(document.documentElement, {
+          useCORS: finalConfig.useCORS,
+          allowTaint: false,
+          backgroundColor: finalConfig.backgroundColor,
+          scale: finalConfig.scale,
+          logging: finalConfig.logging,
+          x: scrollX,
+          y: scrollY,
+          width: viewportWidth,
+          height: viewportHeight,
+          windowWidth: viewportWidth,
+          windowHeight: viewportHeight,
+          scrollX: 0,
+          scrollY: 0,
+          ignoreElements: (element: Element) => {
+            return element.tagName === 'SCRIPT';
+          },
+        });
+
+        if (finalConfig.logging) {
+          console.log(
+            '[AutoCapture] Screenshot captured, converting to blob...'
+          );
+        }
+
+        // Convert to blob and download
+        const blob = await canvasToBlob(canvas, finalConfig.quality);
+        const filename = finalConfig.filename.includes('.')
+          ? finalConfig.filename
+          : `${finalConfig.filename}.png`;
+
+        downloadFile(blob, filename);
+
+        if (finalConfig.logging) {
+          console.log('[AutoCapture] Screenshot downloaded successfully!', {
+            width: canvas.width,
+            height: canvas.height,
+            filename,
+            size: `${(blob.size / 1024).toFixed(2)} KB`,
           });
         }
-      } else if (finalConfig.logging) {
-        console.log('[AutoCapture] Capturing full page');
-      }
+      } else {
+        // Capture full page
+        if (finalConfig.logging) {
+          console.log('[AutoCapture] Capturing full page');
+        }
 
-      const canvas = await html2canvas(document.body, html2canvasOptions);
-
-      if (finalConfig.logging) {
-        console.log('[AutoCapture] Screenshot captured, converting to blob...');
-      }
-
-      // Convert to blob and download
-      const blob = await canvasToBlob(canvas, finalConfig.quality);
-      const filename = finalConfig.filename.includes('.')
-        ? finalConfig.filename
-        : `${finalConfig.filename}.png`;
-
-      downloadFile(blob, filename);
-
-      if (finalConfig.logging) {
-        console.log('[AutoCapture] Screenshot downloaded successfully!', {
-          width: canvas.width,
-          height: canvas.height,
-          filename,
-          size: `${(blob.size / 1024).toFixed(2)} KB`,
+        const canvas = await html2canvas(document.body, {
+          useCORS: finalConfig.useCORS,
+          allowTaint: false,
+          backgroundColor: finalConfig.backgroundColor,
+          scale: finalConfig.scale,
+          logging: finalConfig.logging,
+          ignoreElements: (element: Element) => {
+            return element.tagName === 'SCRIPT';
+          },
         });
+
+        if (finalConfig.logging) {
+          console.log(
+            '[AutoCapture] Screenshot captured, converting to blob...'
+          );
+        }
+
+        // Convert to blob and download
+        const blob = await canvasToBlob(canvas, finalConfig.quality);
+        const filename = finalConfig.filename.includes('.')
+          ? finalConfig.filename
+          : `${finalConfig.filename}.png`;
+
+        downloadFile(blob, filename);
+
+        if (finalConfig.logging) {
+          console.log('[AutoCapture] Screenshot downloaded successfully!', {
+            width: canvas.width,
+            height: canvas.height,
+            filename,
+            size: `${(blob.size / 1024).toFixed(2)} KB`,
+          });
+        }
       }
     } catch (error) {
       console.error('[AutoCapture] Failed to capture screenshot:', error);
