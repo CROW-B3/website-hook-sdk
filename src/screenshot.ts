@@ -1,4 +1,4 @@
-import html2canvas from 'html2canvas';
+import html2canvas from 'html2canvas-pro';
 import type { SaveOptions, ScreenshotConfig, ScreenshotResult } from './types';
 import { ScreenshotError, ScreenshotErrorType } from './types';
 import { downloadFile, waitForPageLoad } from './utils';
