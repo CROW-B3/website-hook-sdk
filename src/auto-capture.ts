@@ -24,6 +24,25 @@ export interface AutoCaptureConfig {
   viewportOnly?: boolean;
 
   /**
+   * Cloudflare Edge Worker URL to upload screenshot
+   * If provided, screenshot will be uploaded instead of downloaded
+   * @example 'https://your-worker.workers.dev/screenshot'
+   */
+  uploadUrl?: string;
+
+  /**
+   * Additional metadata to send with the screenshot upload
+   * @default {}
+   */
+  uploadMetadata?: Record<string, any>;
+
+  /**
+   * Download screenshot locally if upload fails
+   * @default true
+   */
+  downloadOnUploadFail?: boolean;
+
+  /**
    * Enable CORS for external images
    * @default true
    */
@@ -82,6 +101,72 @@ async function canvasToBlob(
 }
 
 /**
+ * Upload screenshot to edge worker using FormData
+ */
+async function uploadScreenshot(
+  blob: Blob,
+  filename: string,
+  uploadUrl: string,
+  metadata: Record<string, any>,
+  logging: boolean
+): Promise<boolean> {
+  try {
+    if (logging) {
+      console.log('[AutoCapture] Uploading screenshot to:', uploadUrl);
+    }
+
+    // Create FormData with screenshot and metadata
+    const formData = new FormData();
+    formData.append('screenshot', blob, filename);
+    formData.append('filename', filename);
+    formData.append('timestamp', Date.now().toString());
+    formData.append('url', window.location.href);
+    formData.append('userAgent', navigator.userAgent);
+    formData.append(
+      'viewport',
+      JSON.stringify({
+        width: window.innerWidth,
+        height: window.innerHeight,
+        scrollX: window.scrollX || window.pageXOffset,
+        scrollY: window.scrollY || window.pageYOffset,
+      })
+    );
+
+    // Add custom metadata
+    Object.entries(metadata).forEach(([key, value]) => {
+      formData.append(
+        key,
+        typeof value === 'string' ? value : JSON.stringify(value)
+      );
+    });
+
+    // Upload to edge worker
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Upload failed: ${response.status} ${response.statusText}`
+      );
+    }
+
+    if (logging) {
+      console.log('[AutoCapture] Screenshot uploaded successfully!', {
+        status: response.status,
+        size: `${(blob.size / 1024).toFixed(2)} KB`,
+      });
+    }
+
+    return true;
+  } catch (error) {
+    console.error('[AutoCapture] Failed to upload screenshot:', error);
+    return false;
+  }
+}
+
+/**
  * Initializes auto-capture functionality that takes a screenshot after a delay
  *
  * @param config - Configuration options for auto-capture
@@ -116,11 +201,41 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
 
   isInitialized = true;
 
+  // Auto-detect site information from current URL
+  const hostname = window.location.hostname;
+  const siteName = hostname.replace(/^www\./, '').split('.')[0];
+
+  // Get upload URL from environment variable or config
+  // @ts-ignore - process.env may not exist in all environments
+  const envUploadUrl =
+    typeof process !== 'undefined' && typeof process.env !== 'undefined'
+      ? process.env.NEXT_PUBLIC_SCREENSHOT_UPLOAD_URL
+      : undefined;
+  const defaultUploadUrl = envUploadUrl || 'http://localhost:3001/screenshot';
+
+  // Auto-generate metadata based on current site
+  // @ts-ignore - process.env may not exist in all environments
+  const envNodeEnv =
+    typeof process !== 'undefined' && typeof process.env !== 'undefined'
+      ? process.env.NODE_ENV
+      : undefined;
+  const defaultMetadata = {
+    site: siteName,
+    hostname: hostname,
+    environment: envNodeEnv || 'production',
+    timestamp: Date.now(),
+    userAgent: navigator.userAgent,
+    ...config.uploadMetadata, // Allow override
+  };
+
   // Default configuration
-  const finalConfig: Required<AutoCaptureConfig> = {
+  const finalConfig = {
     delay: config.delay ?? 5000,
-    filename: config.filename ?? `screenshot-${Date.now()}`,
-    viewportOnly: config.viewportOnly ?? false,
+    filename: config.filename ?? `${siteName}-screenshot-${Date.now()}`,
+    viewportOnly: config.viewportOnly ?? true,
+    uploadUrl: config.uploadUrl ?? defaultUploadUrl,
+    uploadMetadata: defaultMetadata,
+    downloadOnUploadFail: config.downloadOnUploadFail ?? true,
     useCORS: config.useCORS ?? true,
     backgroundColor: config.backgroundColor ?? '#ffffff',
     scale: config.scale ?? window.devicePixelRatio,
@@ -187,21 +302,43 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
           );
         }
 
-        // Convert to blob and download
+        // Convert to blob
         const blob = await canvasToBlob(canvas, finalConfig.quality);
         const filename = finalConfig.filename.includes('.')
           ? finalConfig.filename
           : `${finalConfig.filename}.png`;
 
-        downloadFile(blob, filename);
-
-        if (finalConfig.logging) {
-          console.log('[AutoCapture] Screenshot downloaded successfully!', {
-            width: canvas.width,
-            height: canvas.height,
+        // Upload to edge worker if URL is provided
+        if (finalConfig.uploadUrl) {
+          const uploadSuccess = await uploadScreenshot(
+            blob,
             filename,
-            size: `${(blob.size / 1024).toFixed(2)} KB`,
-          });
+            finalConfig.uploadUrl,
+            finalConfig.uploadMetadata,
+            finalConfig.logging
+          );
+
+          // Fallback to download if upload fails and fallback is enabled
+          if (!uploadSuccess && finalConfig.downloadOnUploadFail) {
+            if (finalConfig.logging) {
+              console.log(
+                '[AutoCapture] Upload failed, downloading locally...'
+              );
+            }
+            downloadFile(blob, filename);
+          }
+        } else {
+          // No upload URL, download locally
+          downloadFile(blob, filename);
+
+          if (finalConfig.logging) {
+            console.log('[AutoCapture] Screenshot downloaded successfully!', {
+              width: canvas.width,
+              height: canvas.height,
+              filename,
+              size: `${(blob.size / 1024).toFixed(2)} KB`,
+            });
+          }
         }
       } else {
         // Capture full page
@@ -226,21 +363,43 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
           );
         }
 
-        // Convert to blob and download
+        // Convert to blob
         const blob = await canvasToBlob(canvas, finalConfig.quality);
         const filename = finalConfig.filename.includes('.')
           ? finalConfig.filename
           : `${finalConfig.filename}.png`;
 
-        downloadFile(blob, filename);
-
-        if (finalConfig.logging) {
-          console.log('[AutoCapture] Screenshot downloaded successfully!', {
-            width: canvas.width,
-            height: canvas.height,
+        // Upload to edge worker if URL is provided
+        if (finalConfig.uploadUrl) {
+          const uploadSuccess = await uploadScreenshot(
+            blob,
             filename,
-            size: `${(blob.size / 1024).toFixed(2)} KB`,
-          });
+            finalConfig.uploadUrl,
+            finalConfig.uploadMetadata,
+            finalConfig.logging
+          );
+
+          // Fallback to download if upload fails and fallback is enabled
+          if (!uploadSuccess && finalConfig.downloadOnUploadFail) {
+            if (finalConfig.logging) {
+              console.log(
+                '[AutoCapture] Upload failed, downloading locally...'
+              );
+            }
+            downloadFile(blob, filename);
+          }
+        } else {
+          // No upload URL, download locally
+          downloadFile(blob, filename);
+
+          if (finalConfig.logging) {
+            console.log('[AutoCapture] Screenshot downloaded successfully!', {
+              width: canvas.width,
+              height: canvas.height,
+              filename,
+              size: `${(blob.size / 1024).toFixed(2)} KB`,
+            });
+          }
         }
       }
     } catch (error) {

@@ -4,8 +4,13 @@ A lightweight JavaScript/TypeScript SDK for capturing user interactions on web p
 
 ## Features
 
-- 📸 **Screenshot Capture**: High-quality web page screenshots using html2canvas
+- 📸 **Screenshot Capture**: High-quality web page screenshots using html2canvas-pro
+- 🎯 **Auto-Capture**: Automatic screenshot capture on page load
 - 🔒 **CORS Support**: Handle external images with proper CORS configuration
+- ☁️ **Edge Worker Upload**: Upload screenshots to Cloudflare Workers
+- 🎨 **Modern CSS Support**: Handles oklch, oklab, and other modern color functions
+- 📱 **Viewport Capture**: Capture only visible area at current scroll position
+- 🤖 **Auto-Configuration**: Automatically detects site info and metadata
 - 💾 **Local Storage**: Automatic download and save to local file system
 - ⚡ **Performance Optimized**: Industry-standard best practices
 - 🛡️ **Type Safe**: Full TypeScript support with comprehensive type definitions
@@ -19,22 +24,92 @@ pnpm install @b3-crow/website-hook-sdk
 
 ## Quick Start
 
+### Auto-Capture (Recommended)
+
+Automatically capture screenshots 5 seconds after page load:
+
+```typescript
+import { initAutoCapture } from '@b3-crow/website-hook-sdk';
+
+// Minimal setup - SDK auto-configures everything
+initAutoCapture({
+  logging: true, // Optional: enable logging
+});
+```
+
+The SDK automatically:
+
+- ✅ Detects site name from URL
+- ✅ Captures viewport at user's scroll position
+- ✅ Generates metadata (site, hostname, environment, userAgent)
+- ✅ Uploads to Cloudflare Worker (if configured)
+- ✅ Falls back to local download if upload fails
+
+### Manual Capture
+
+For more control:
+
 ```typescript
 import { ScreenshotCapture } from '@b3-crow/website-hook-sdk';
 
-// Initialize the SDK
 const capturer = new ScreenshotCapture({
   useCORS: true,
   quality: 0.92,
 });
 
-// Capture and save screenshot
 await capturer.captureAndSave();
+```
+
+## Configuration
+
+### Environment Variables
+
+Configure the upload URL using environment variables:
+
+```bash
+# .env.local
+NEXT_PUBLIC_SCREENSHOT_UPLOAD_URL=https://your-worker.workers.dev/screenshot
+```
+
+### React Integration
+
+```tsx
+'use client';
+
+import { useEffect } from 'react';
+import { initAutoCapture } from '@b3-crow/website-hook-sdk';
+
+export function AutoScreenshotCapture() {
+  useEffect(() => {
+    initAutoCapture({ logging: true });
+  }, []);
+
+  return null;
+}
+```
+
+Add to your layout:
+
+```tsx
+import { AutoScreenshotCapture } from '@/components/screenshot-auto-capture';
+
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <body>
+        {children}
+        <AutoScreenshotCapture />
+      </body>
+    </html>
+  );
+}
 ```
 
 ## Documentation
 
 For comprehensive documentation on screenshot capture functionality, see [SCREENSHOT_GUIDE.md](./SCREENSHOT_GUIDE.md).
+
+For Cloudflare Worker setup, see [example-worker.js](./example-worker.js).
 
 ## Live Demo
 
