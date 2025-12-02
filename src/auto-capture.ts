@@ -6,10 +6,11 @@ import { downloadFile } from './utils';
  */
 export interface AutoCaptureConfig {
   /**
-   * Delay in milliseconds before capturing screenshot
-   * @default 5000 (5 seconds)
+   * Interval in milliseconds for continuous screenshot capture
+   * If set, screenshots will be captured repeatedly at this interval
+   * @default 1000 (1 second) - captures every second
    */
-  delay?: number;
+  interval?: number;
 
   /**
    * Filename for the screenshot (without extension)
@@ -167,18 +168,18 @@ async function uploadScreenshot(
 }
 
 /**
- * Initializes auto-capture functionality that takes a screenshot after a delay
+ * Initializes auto-capture functionality that takes screenshots immediately and optionally continuously
  *
  * @param config - Configuration options for auto-capture
  *
  * @example
  * ```typescript
- * // Basic usage with defaults (5 second delay)
+ * // Basic usage - captures immediately once
  * initAutoCapture();
  *
- * // Custom configuration
+ * // Continuous capture every 5 seconds
  * initAutoCapture({
- *   delay: 3000,
+ *   interval: 5000,
  *   filename: 'my-website-screenshot',
  *   logging: true
  * });
@@ -230,7 +231,7 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
 
   // Default configuration
   const finalConfig = {
-    delay: config.delay ?? 5000,
+    interval: config.interval, // Optional - only set if user wants continuous capture
     filename: config.filename ?? `${siteName}-screenshot-${Date.now()}`,
     viewportOnly: config.viewportOnly ?? true,
     uploadUrl: config.uploadUrl ?? defaultUploadUrl,
@@ -247,14 +248,18 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
     console.log('[AutoCapture] Initialized with config:', finalConfig);
   }
 
-  // Set up delayed capture
-  setTimeout(async () => {
+  // Define the capture function that will be called repeatedly
+  const captureScreenshot = async () => {
     try {
-      if (finalConfig.logging) {
-        console.log(
-          `[AutoCapture] Starting capture after ${finalConfig.delay}ms delay...`
-        );
-      }
+      // Generate unique filename with timestamp for each capture
+      const timestamp = Date.now();
+      const filenameBase = `${siteName}-screenshot-${timestamp}`;
+
+      // Update metadata timestamp for each capture
+      const captureMetadata = {
+        ...defaultMetadata,
+        timestamp,
+      };
 
       // If viewportOnly is true, capture only the visible area at current scroll position
       if (finalConfig.viewportOnly) {
@@ -304,9 +309,7 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
 
         // Convert to blob
         const blob = await canvasToBlob(canvas, finalConfig.quality);
-        const filename = finalConfig.filename.includes('.')
-          ? finalConfig.filename
-          : `${finalConfig.filename}.png`;
+        const filename = `${filenameBase}.png`;
 
         // Upload to edge worker if URL is provided
         if (finalConfig.uploadUrl) {
@@ -314,7 +317,7 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
             blob,
             filename,
             finalConfig.uploadUrl,
-            finalConfig.uploadMetadata,
+            captureMetadata,
             finalConfig.logging
           );
 
@@ -365,9 +368,7 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
 
         // Convert to blob
         const blob = await canvasToBlob(canvas, finalConfig.quality);
-        const filename = finalConfig.filename.includes('.')
-          ? finalConfig.filename
-          : `${finalConfig.filename}.png`;
+        const filename = `${filenameBase}.png`;
 
         // Upload to edge worker if URL is provided
         if (finalConfig.uploadUrl) {
@@ -375,7 +376,7 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
             blob,
             filename,
             finalConfig.uploadUrl,
-            finalConfig.uploadMetadata,
+            captureMetadata,
             finalConfig.logging
           );
 
@@ -405,5 +406,24 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
     } catch (error) {
       console.error('[AutoCapture] Failed to capture screenshot:', error);
     }
-  }, finalConfig.delay);
+  };
+
+  // Capture first screenshot immediately
+  if (finalConfig.logging) {
+    console.log('[AutoCapture] Capturing screenshot immediately...');
+  }
+  captureScreenshot();
+
+  // Set up continuous capture if interval is specified
+  if (finalConfig.interval) {
+    if (finalConfig.logging) {
+      console.log(
+        `[AutoCapture] Setting up continuous capture every ${finalConfig.interval}ms`
+      );
+    }
+
+    setInterval(() => {
+      captureScreenshot();
+    }, finalConfig.interval);
+  }
 }

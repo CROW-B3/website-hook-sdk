@@ -26,14 +26,20 @@ pnpm install @b3-crow/website-hook-sdk
 
 ### Auto-Capture (Recommended)
 
-Automatically capture screenshots 5 seconds after page load:
+Automatically capture screenshots immediately when called:
 
 ```typescript
 import { initAutoCapture } from '@b3-crow/website-hook-sdk';
 
-// Minimal setup - SDK auto-configures everything
+// Minimal setup - SDK auto-configures everything and captures immediately
 initAutoCapture({
   logging: true, // Optional: enable logging
+});
+
+// Optional: Continuous capture every 5 seconds
+initAutoCapture({
+  interval: 5000, // Capture every 5 seconds
+  logging: true,
 });
 ```
 
