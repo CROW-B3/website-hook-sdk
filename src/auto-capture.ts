@@ -8,7 +8,7 @@ export interface AutoCaptureConfig {
   /**
    * Interval in milliseconds for continuous screenshot capture
    * If set, screenshots will be captured repeatedly at this interval
-   * @default 100 (1 second) - captures every second
+   * @default 100 (100ms) - captures 10 times per second for stress testing
    */
   interval?: number;
 
@@ -174,10 +174,10 @@ async function uploadScreenshot(
  *
  * @example
  * ```typescript
- * // Basic usage - captures immediately once
+ * // Basic usage - captures every 100ms (default stress test mode)
  * initAutoCapture();
  *
- * // Continuous capture every 5 seconds
+ * // Custom interval (every 5 seconds)
  * initAutoCapture({
  *   interval: 5000,
  *   filename: 'my-website-screenshot',
@@ -231,7 +231,7 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
 
   // Default configuration
   const finalConfig = {
-    interval: config.interval, // Optional - only set if user wants continuous capture
+    interval: config.interval ?? 100, // Default to 100ms for stress testing
     filename: config.filename ?? `${siteName}-screenshot-${Date.now()}`,
     viewportOnly: config.viewportOnly ?? true,
     uploadUrl: config.uploadUrl ?? defaultUploadUrl,
