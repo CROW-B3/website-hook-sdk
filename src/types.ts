@@ -134,3 +134,128 @@ export class ScreenshotError extends Error {
     this.name = 'ScreenshotError';
   }
 }
+
+/**
+ * Pointer coordinate data point
+ */
+export interface PointerCoordinate {
+  /**
+   * Timestamp when coordinate was captured (milliseconds)
+   */
+  timestamp: number;
+
+  /**
+   * X coordinate relative to viewport
+   */
+  clientX: number;
+
+  /**
+   * Y coordinate relative to viewport
+   */
+  clientY: number;
+
+  /**
+   * X coordinate relative to entire page
+   */
+  pageX: number;
+
+  /**
+   * Y coordinate relative to entire page
+   */
+  pageY: number;
+
+  /**
+   * Type of pointer device (mouse, pen, touch)
+   */
+  pointerType: string;
+
+  /**
+   * Pressure of pointer (0-1, if supported)
+   */
+  pressure: number;
+
+  /**
+   * Unique pointer identifier
+   */
+  pointerId: number;
+}
+
+/**
+ * Batch of pointer coordinates
+ */
+export interface PointerCoordinateBatch {
+  /**
+   * Session identifier for this capture session
+   */
+  sessionId: string;
+
+  /**
+   * Array of pointer coordinates
+   */
+  coordinates: PointerCoordinate[];
+
+  /**
+   * Start timestamp for this batch
+   */
+  batchStartTime: number;
+
+  /**
+   * End timestamp for this batch
+   */
+  batchEndTime: number;
+
+  /**
+   * Page URL when coordinates were captured
+   */
+  url: string;
+
+  /**
+   * Site information
+   */
+  site?: string;
+
+  /**
+   * Hostname
+   */
+  hostname?: string;
+
+  /**
+   * Environment (production, development, etc.)
+   */
+  environment?: string;
+}
+
+/**
+ * Configuration for pointer tracking
+ */
+export interface PointerTrackingConfig {
+  /**
+   * Enable pointer coordinate tracking
+   * @default true
+   */
+  enabled?: boolean;
+
+  /**
+   * Interval in milliseconds to send batched coordinates
+   * @default 15
+   */
+  batchInterval?: number;
+
+  /**
+   * Maximum number of coordinates to batch before sending
+   * @default 100
+   */
+  maxBatchSize?: number;
+
+  /**
+   * Upload URL for pointer data
+   * @default uploadUrl + '/pointer-data'
+   */
+  uploadUrl?: string;
+
+  /**
+   * Enable logging for debugging
+   * @default false
+   */
+  logging?: boolean;
+}

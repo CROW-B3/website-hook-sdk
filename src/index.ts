@@ -11,7 +11,14 @@ export { initAutoCapture } from './auto-capture';
 export type { AutoCaptureConfig } from './auto-capture';
 
 // Types and interfaces
-export type { ScreenshotConfig, ScreenshotResult, SaveOptions } from './types';
+export type {
+  ScreenshotConfig,
+  ScreenshotResult,
+  SaveOptions,
+  PointerCoordinate,
+  PointerCoordinateBatch,
+  PointerTrackingConfig,
+} from './types';
 
 // Error types
 export { ScreenshotError, ScreenshotErrorType } from './types';
