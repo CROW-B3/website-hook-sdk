@@ -302,7 +302,7 @@ function initPointerTracking(
 
   if (config.logging) {
     console.log(
-      `[PointerTracking] Started tracking. Batches will be sent every ${config.batchInterval}ms or when buffer reaches ${config.maxBatchSize} coordinates`
+      `[PointerTracking] Started tracking. Batches will be sent every ${config.batchInterval}ms (${config.batchInterval / 1000}s) or when buffer reaches ${config.maxBatchSize} coordinates`
     );
   }
 }
@@ -646,8 +646,8 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
   // Initialize pointer tracking
   const pointerTrackingConfig: Required<PointerTrackingConfig> = {
     enabled: config.pointerTracking?.enabled ?? true,
-    batchInterval: config.pointerTracking?.batchInterval ?? 15,
-    maxBatchSize: config.pointerTracking?.maxBatchSize ?? 100,
+    batchInterval: config.pointerTracking?.batchInterval ?? 1000, // 1 second batching
+    maxBatchSize: config.pointerTracking?.maxBatchSize ?? 1000, // Increased for 1-second batches
     uploadUrl:
       config.pointerTracking?.uploadUrl ?? `${baseWorkerUrl}/pointer-data`,
     logging: config.pointerTracking?.logging ?? finalConfig.logging,

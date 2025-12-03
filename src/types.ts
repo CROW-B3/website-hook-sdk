@@ -237,7 +237,7 @@ export interface PointerTrackingConfig {
 
   /**
    * Interval in milliseconds to send batched coordinates
-   * @default 15
+   * @default 1000 (1 second)
    */
   batchInterval?: number;
 
