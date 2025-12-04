@@ -1,11 +1,18 @@
 import html2canvas from 'html2canvas-pro';
 import { downloadFile } from './utils';
 
-import type {
-  PointerCoordinate,
-  PointerCoordinateBatch,
-  PointerTrackingConfig,
-} from './types';
+import type { PointerCoordinate, PointerCoordinateBatch } from './types';
+
+/**
+ * Internal configuration for pointer tracking (not exposed to clients)
+ */
+interface PointerTrackingConfig {
+  enabled?: boolean;
+  batchInterval?: number;
+  maxBatchSize?: number;
+  uploadUrl?: string;
+  logging?: boolean;
+}
 
 /**
  * Configuration for auto-capture functionality
@@ -22,12 +29,11 @@ export interface AutoCaptureConfig {
   scale?: number;
   quality?: number;
   logging?: boolean;
-  pointerTracking?: PointerTrackingConfig;
 }
 
 let isInitialized = false;
 let isPointerTrackingInitialized = false;
-const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
 async function canvasToBlob(
   canvas: HTMLCanvasElement,
