@@ -20,7 +20,6 @@ export type {
   SaveOptions,
   PointerCoordinate,
   PointerCoordinateBatch,
-  PointerTrackingConfig,
   InteractionTrackingConfig,
 } from './types';
 

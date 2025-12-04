@@ -12,7 +12,7 @@ let isPointerTrackingInitialized = false;
 /**
  * Session ID for this capture session (generated once per page load)
  */
-const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
 /**
  * Upload pointer coordinate batch to edge worker

@@ -139,44 +139,13 @@ export class ScreenshotError extends Error {
  * Pointer coordinate data point
  */
 export interface PointerCoordinate {
-  /**
-   * Timestamp when coordinate was captured (milliseconds)
-   */
   timestamp: number;
-
-  /**
-   * X coordinate relative to viewport
-   */
   clientX: number;
-
-  /**
-   * Y coordinate relative to viewport
-   */
   clientY: number;
-
-  /**
-   * X coordinate relative to entire page
-   */
   pageX: number;
-
-  /**
-   * Y coordinate relative to entire page
-   */
   pageY: number;
-
-  /**
-   * Type of pointer device (mouse, pen, touch)
-   */
   pointerType: string;
-
-  /**
-   * Pressure of pointer (0-1, if supported)
-   */
   pressure: number;
-
-  /**
-   * Unique pointer identifier
-   */
   pointerId: number;
 }
 
@@ -184,80 +153,14 @@ export interface PointerCoordinate {
  * Batch of pointer coordinates
  */
 export interface PointerCoordinateBatch {
-  /**
-   * Session identifier for this capture session
-   */
   sessionId: string;
-
-  /**
-   * Array of pointer coordinates
-   */
   coordinates: PointerCoordinate[];
-
-  /**
-   * Start timestamp for this batch
-   */
   batchStartTime: number;
-
-  /**
-   * End timestamp for this batch
-   */
   batchEndTime: number;
-
-  /**
-   * Page URL when coordinates were captured
-   */
   url: string;
-
-  /**
-   * Site information
-   */
   site?: string;
-
-  /**
-   * Hostname
-   */
   hostname?: string;
-
-  /**
-   * Environment (production, development, etc.)
-   */
   environment?: string;
-}
-
-/**
- * Configuration for pointer tracking
- */
-export interface PointerTrackingConfig {
-  /**
-   * Enable pointer coordinate tracking
-   * @default true
-   */
-  enabled?: boolean;
-
-  /**
-   * Interval in milliseconds to send batched coordinates
-   * @default 1000 (1 second)
-   */
-  batchInterval?: number;
-
-  /**
-   * Maximum number of coordinates to batch before sending
-   * @default 100
-   */
-  maxBatchSize?: number;
-
-  /**
-   * Upload URL for pointer data
-   * @default uploadUrl + '/pointer-data'
-   */
-  uploadUrl?: string;
-
-  /**
-   * Enable logging for debugging
-   * @default false
-   */
-  logging?: boolean;
 }
 
 /**
@@ -267,12 +170,5 @@ export interface PointerTrackingConfig {
  * Clients can only control logging to avoid affecting server load or data quality.
  */
 export interface InteractionTrackingConfig {
-  /**
-   * Enable logging for debugging
-   * @default false
-   *
-   * This is the ONLY client-configurable parameter.
-   * All other settings (batchInterval: 1000ms, maxBatchSize: 1000) are hardcoded.
-   */
   logging?: boolean;
 }
