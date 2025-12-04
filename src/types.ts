@@ -262,24 +262,17 @@ export interface PointerTrackingConfig {
 
 /**
  * Simplified configuration for interaction tracking (pointer movements)
- * This is a flat, user-friendly interface without screenshot options
+ *
+ * NOTE: batchInterval and maxBatchSize are HARDCODED in the SDK for consistency.
+ * Clients can only control logging to avoid affecting server load or data quality.
  */
 export interface InteractionTrackingConfig {
   /**
-   * Interval in milliseconds to send batched coordinates
-   * @default 1000 (1 second)
-   */
-  batchInterval?: number;
-
-  /**
-   * Maximum number of coordinates to batch before sending
-   * @default 1000
-   */
-  maxBatchSize?: number;
-
-  /**
    * Enable logging for debugging
    * @default false
+   *
+   * This is the ONLY client-configurable parameter.
+   * All other settings (batchInterval: 1000ms, maxBatchSize: 1000) are hardcoded.
    */
   logging?: boolean;
 }

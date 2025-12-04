@@ -65,18 +65,21 @@ async function uploadPointerBatch(
 /**
  * Initializes interaction tracking to capture user pointer movements
  *
- * @param config - Configuration options for interaction tracking
+ * HARDCODED CONFIGURATION (cannot be changed by client):
+ * - batchInterval: 1000ms (1 second)
+ * - maxBatchSize: 1000 coordinates
+ * - uploadUrl: Auto-detected from NEXT_PUBLIC_SCREENSHOT_UPLOAD_URL
+ *
+ * @param config - Configuration options (ONLY logging is configurable)
  *
  * @example
  * ```typescript
- * // Basic usage with defaults
+ * // Basic usage (logging disabled by default)
  * initInteractionTracking();
  *
- * // Custom configuration
+ * // Enable debug logs (ONLY client-configurable option)
  * initInteractionTracking({
- *   batchInterval: 2000,  // Send every 2 seconds
- *   maxBatchSize: 500,    // Or when 500 coordinates collected
- *   logging: true         // Enable debug logs
+ *   logging: true  // Enable detailed debug logs
  * });
  * ```
  */
@@ -119,10 +122,12 @@ export function initInteractionTracking(
       ? process.env.NODE_ENV || 'production'
       : 'production';
 
-  // Configuration with defaults
-  const batchInterval = 1000; // Default 1 second
-  const maxBatchSize = 1000; // Default 1000 coordinates
-  const uploadUrl = `${baseWorkerUrl}/pointer-data`;
+  // HARDCODED Configuration (client cannot change these)
+  const batchInterval = 1000; // HARDCODED: 1 second batching
+  const maxBatchSize = 1000; // HARDCODED: 1000 coordinates max
+  const uploadUrl = `${baseWorkerUrl}/pointer-data`; // Auto-constructed from env var
+
+  // Client-configurable options (ONLY this can be changed by client)
   const logging = config.logging ?? false;
 
   if (logging) {
