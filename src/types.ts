@@ -259,3 +259,27 @@ export interface PointerTrackingConfig {
    */
   logging?: boolean;
 }
+
+/**
+ * Simplified configuration for interaction tracking (pointer movements)
+ * This is a flat, user-friendly interface without screenshot options
+ */
+export interface InteractionTrackingConfig {
+  /**
+   * Interval in milliseconds to send batched coordinates
+   * @default 1000 (1 second)
+   */
+  batchInterval?: number;
+
+  /**
+   * Maximum number of coordinates to batch before sending
+   * @default 1000
+   */
+  maxBatchSize?: number;
+
+  /**
+   * Enable logging for debugging
+   * @default false
+   */
+  logging?: boolean;
+}

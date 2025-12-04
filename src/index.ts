@@ -6,9 +6,12 @@
 // Main screenshot capture class
 export { ScreenshotCapture } from './screenshot';
 
-// Auto-capture functionality
+// Auto-capture functionality (legacy - for screenshots + pointer tracking)
 export { initAutoCapture } from './auto-capture';
 export type { AutoCaptureConfig } from './auto-capture';
+
+// Simplified interaction tracking (pointer movements only)
+export { initInteractionTracking } from './interaction-tracking';
 
 // Types and interfaces
 export type {
@@ -18,6 +21,7 @@ export type {
   PointerCoordinate,
   PointerCoordinateBatch,
   PointerTrackingConfig,
+  InteractionTrackingConfig,
 } from './types';
 
 // Error types

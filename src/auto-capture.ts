@@ -11,100 +11,24 @@ import type {
  * Configuration for auto-capture functionality
  */
 export interface AutoCaptureConfig {
-  /**
-   * Interval in milliseconds for continuous screenshot capture
-   * If set to null or undefined, screenshot capture is DISABLED
-   * Set to a number (e.g., 100, 1000, 5000) to enable screenshot capture
-   * @default null (disabled)
-   */
   interval?: number | null;
-
-  /**
-   * Filename for the screenshot (without extension)
-   * @default 'screenshot-{timestamp}'
-   */
   filename?: string;
-
-  /**
-   * Capture only the visible viewport area instead of the full page
-   * @default false (captures full page)
-   */
   viewportOnly?: boolean;
-
-  /**
-   * Cloudflare Edge Worker URL to upload screenshot
-   * If provided, screenshot will be uploaded instead of downloaded
-   * @example 'https://your-worker.workers.dev/screenshot'
-   */
   uploadUrl?: string;
-
-  /**
-   * Additional metadata to send with the screenshot upload
-   * @default {}
-   */
   uploadMetadata?: Record<string, any>;
-
-  /**
-   * Download screenshot locally if upload fails
-   * @default true
-   */
   downloadOnUploadFail?: boolean;
-
-  /**
-   * Enable CORS for external images
-   * @default true
-   */
   useCORS?: boolean;
-
-  /**
-   * Background color for transparent elements
-   * @default '#ffffff'
-   */
   backgroundColor?: string;
-
-  /**
-   * Scale factor for higher resolution screenshots
-   * @default window.devicePixelRatio
-   */
   scale?: number;
-
-  /**
-   * Image quality (0-1)
-   * @default 0.92
-   */
   quality?: number;
-
-  /**
-   * Enable logging for debugging
-   * @default false
-   */
   logging?: boolean;
-
-  /**
-   * Pointer coordinate tracking configuration
-   * @default { enabled: true, batchInterval: 15, maxBatchSize: 100 }
-   */
   pointerTracking?: PointerTrackingConfig;
 }
 
-/**
- * Internal flag to prevent multiple initializations
- */
 let isInitialized = false;
-
-/**
- * Internal flag to track pointer tracking initialization
- */
 let isPointerTrackingInitialized = false;
-
-/**
- * Session ID for this capture session (generated once per page load)
- */
 const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-/**
- * Converts canvas to blob
- */
 async function canvasToBlob(
   canvas: HTMLCanvasElement,
   quality: number
@@ -124,9 +48,6 @@ async function canvasToBlob(
   });
 }
 
-/**
- * Upload pointer coordinate batch to edge worker
- */
 async function uploadPointerBatch(
   batch: PointerCoordinateBatch,
   uploadUrl: string,
@@ -374,22 +295,10 @@ async function uploadScreenshot(
 }
 
 /**
- * Initializes auto-capture functionality that takes screenshots immediately and optionally continuously
+ * Initializes auto-capture functionality for screenshots and pointer tracking
+ * @deprecated Use initInteractionTracking from './interaction-tracking' for pointer tracking only
  *
  * @param config - Configuration options for auto-capture
- *
- * @example
- * ```typescript
- * // Basic usage - captures every 100ms (default stress test mode)
- * initAutoCapture();
- *
- * // Custom interval (every 5 seconds)
- * initAutoCapture({
- *   interval: 5000,
- *   filename: 'my-website-screenshot',
- *   logging: true
- * });
- * ```
  */
 export function initAutoCapture(config: AutoCaptureConfig = {}): void {
   // Prevent multiple initializations
@@ -441,7 +350,7 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
 
   // Default configuration
   const finalConfig = {
-    interval: config.interval ?? null, // Default to null (disabled) - only pointer tracking active
+    interval: 300, // Default to null (disabled) - only pointer tracking active
     filename: config.filename ?? `${siteName}-screenshot-${Date.now()}`,
     viewportOnly: config.viewportOnly ?? true,
     uploadUrl: config.uploadUrl ?? defaultUploadUrl,
@@ -645,12 +554,11 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
 
   // Initialize pointer tracking
   const pointerTrackingConfig: Required<PointerTrackingConfig> = {
-    enabled: config.pointerTracking?.enabled ?? true,
-    batchInterval: config.pointerTracking?.batchInterval ?? 1000, // 1 second batching
-    maxBatchSize: config.pointerTracking?.maxBatchSize ?? 1000, // Increased for 1-second batches
-    uploadUrl:
-      config.pointerTracking?.uploadUrl ?? `${baseWorkerUrl}/pointer-data`,
-    logging: config.pointerTracking?.logging ?? finalConfig.logging,
+    enabled: true,
+    batchInterval: 1000, // 1 second batching
+    maxBatchSize: 1000, // Increased for 1-second batches
+    uploadUrl: `${baseWorkerUrl}/pointer-data`,
+    logging: finalConfig.logging,
   };
 
   initPointerTracking(
