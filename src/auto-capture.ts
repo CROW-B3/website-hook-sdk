@@ -1,19 +1,6 @@
 import html2canvas from 'html2canvas-pro';
 import { downloadFile } from './utils';
 
-import type { PointerCoordinate, PointerCoordinateBatch } from './types';
-
-/**
- * Internal configuration for pointer tracking (not exposed to clients)
- */
-interface PointerTrackingConfig {
-  enabled?: boolean;
-  batchInterval?: number;
-  maxBatchSize?: number;
-  uploadUrl?: string;
-  logging?: boolean;
-}
-
 /**
  * Configuration for auto-capture functionality
  */
@@ -32,8 +19,6 @@ export interface AutoCaptureConfig {
 }
 
 let isInitialized = false;
-let isPointerTrackingInitialized = false;
-const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
 async function canvasToBlob(
   canvas: HTMLCanvasElement,
@@ -52,186 +37,6 @@ async function canvasToBlob(
       quality
     );
   });
-}
-
-async function uploadPointerBatch(
-  batch: PointerCoordinateBatch,
-  uploadUrl: string,
-  logging: boolean
-): Promise<boolean> {
-  try {
-    if (logging) {
-      console.log('[PointerTracking] Uploading batch:', {
-        sessionId: batch.sessionId,
-        coordinates: batch.coordinates.length,
-        timeRange: `${batch.batchStartTime} - ${batch.batchEndTime}`,
-        duration: `${batch.batchEndTime - batch.batchStartTime}ms`,
-      });
-      console.log(
-        '[PointerTracking] First 5 coordinates:',
-        batch.coordinates.slice(0, 5)
-      );
-      console.log(
-        '[PointerTracking] Last 5 coordinates:',
-        batch.coordinates.slice(-5)
-      );
-    }
-
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(batch),
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Upload failed: ${response.status} ${response.statusText}`
-      );
-    }
-
-    if (logging) {
-      const responseData = await response.json();
-      console.log(
-        '[PointerTracking] Batch uploaded successfully!',
-        responseData
-      );
-    }
-
-    return true;
-  } catch (error) {
-    console.error('[PointerTracking] Failed to upload batch:', error);
-    return false;
-  }
-}
-
-/**
- * Initialize pointer coordinate tracking
- */
-function initPointerTracking(
-  config: Required<PointerTrackingConfig>,
-  site: string,
-  hostname: string,
-  environment: string
-): void {
-  if (isPointerTrackingInitialized) {
-    if (config.logging) {
-      console.warn('[PointerTracking] Already initialized. Skipping...');
-    }
-    return;
-  }
-
-  if (!config.enabled) {
-    if (config.logging) {
-      console.log('[PointerTracking] Disabled by configuration');
-    }
-    return;
-  }
-
-  isPointerTrackingInitialized = true;
-
-  // Buffer to store coordinates
-  let coordinateBuffer: PointerCoordinate[] = [];
-  let batchStartTime = Date.now();
-
-  if (config.logging) {
-    console.log('[PointerTracking] Initializing with config:', {
-      ...config,
-      sessionId,
-    });
-  }
-
-  // Pointer move event handler
-  const handlePointerMove = (event: PointerEvent) => {
-    const coordinate: PointerCoordinate = {
-      timestamp: Date.now(),
-      clientX: event.clientX,
-      clientY: event.clientY,
-      pageX: event.pageX,
-      pageY: event.pageY,
-      pointerType: event.pointerType,
-      pressure: event.pressure,
-      pointerId: event.pointerId,
-    };
-
-    coordinateBuffer.push(coordinate);
-
-    // If buffer exceeds max size, send immediately
-    if (coordinateBuffer.length >= config.maxBatchSize) {
-      if (config.logging) {
-        console.log(
-          `[PointerTracking] Buffer full (${coordinateBuffer.length} coordinates), sending immediately`
-        );
-      }
-      sendBatch();
-    }
-  };
-
-  // Function to send batched coordinates
-  const sendBatch = async () => {
-    if (coordinateBuffer.length === 0) {
-      return;
-    }
-
-    const batchEndTime = Date.now();
-    const batch: PointerCoordinateBatch = {
-      sessionId,
-      coordinates: [...coordinateBuffer],
-      batchStartTime,
-      batchEndTime,
-      url: window.location.href,
-      site,
-      hostname,
-      environment,
-    };
-
-    // Clear buffer
-    coordinateBuffer = [];
-    batchStartTime = Date.now();
-
-    // Console.log for testing
-    console.log(
-      `[PointerTracking] Batch ready - ${batch.coordinates.length} coordinates over ${batchEndTime - batch.batchStartTime}ms`
-    );
-    console.log('[PointerTracking] Batch data:', {
-      sessionId: batch.sessionId,
-      coordinateCount: batch.coordinates.length,
-      firstCoordinate: batch.coordinates[0],
-      lastCoordinate: batch.coordinates[batch.coordinates.length - 1],
-      url: batch.url,
-      site: batch.site,
-    });
-
-    // Upload to worker
-    if (config.uploadUrl) {
-      await uploadPointerBatch(batch, config.uploadUrl, config.logging);
-    }
-  };
-
-  // Set up interval to send batches
-  setInterval(sendBatch, config.batchInterval);
-
-  // Listen to pointer events
-  document.addEventListener('pointermove', handlePointerMove);
-
-  // Flush remaining coordinates on page unload
-  window.addEventListener('beforeunload', () => {
-    if (coordinateBuffer.length > 0) {
-      if (config.logging) {
-        console.log(
-          `[PointerTracking] Page unloading, flushing ${coordinateBuffer.length} coordinates`
-        );
-      }
-      sendBatch();
-    }
-  });
-
-  if (config.logging) {
-    console.log(
-      `[PointerTracking] Started tracking. Batches will be sent every ${config.batchInterval}ms (${config.batchInterval / 1000}s) or when buffer reaches ${config.maxBatchSize} coordinates`
-    );
-  }
 }
 
 /**
@@ -301,10 +106,11 @@ async function uploadScreenshot(
 }
 
 /**
- * Initializes auto-capture functionality for screenshots and pointer tracking
- * @deprecated Use initInteractionTracking from './interaction-tracking' for pointer tracking only
+ * Initializes auto-capture functionality for periodic screenshots
  *
- * @param config - Configuration options for auto-capture
+ * For pointer tracking, use initInteractionTracking from './interaction-tracking' instead.
+ *
+ * @param config - Configuration options for screenshot auto-capture
  */
 export function initAutoCapture(config: AutoCaptureConfig = {}): void {
   // Prevent multiple initializations
@@ -334,10 +140,6 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
       ? process.env.NEXT_PUBLIC_SCREENSHOT_UPLOAD_URL
       : undefined;
   const defaultUploadUrl = envUploadUrl || 'http://localhost:3001/screenshot';
-
-  // Base URL for worker (without endpoint path)
-  const baseWorkerUrl =
-    defaultUploadUrl.replace(/\/screenshot$/, '') || 'http://localhost:3001';
 
   // Auto-generate metadata based on current site
   // @ts-ignore - process.env may not exist in all environments
@@ -533,7 +335,7 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
     }
   };
 
-  // Screenshot capture is now DISABLED by default
+  // Screenshot capture is DISABLED by default
   // Only capture if interval is explicitly set to a number
   if (finalConfig.interval && finalConfig.interval > 0) {
     // Capture first screenshot immediately
@@ -557,20 +359,4 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
       console.log('[AutoCapture] Screenshot capture DISABLED (interval: null)');
     }
   }
-
-  // Initialize pointer tracking
-  const pointerTrackingConfig: Required<PointerTrackingConfig> = {
-    enabled: true,
-    batchInterval: 1000, // 1 second batching
-    maxBatchSize: 1000, // Increased for 1-second batches
-    uploadUrl: `${baseWorkerUrl}/pointer-data`,
-    logging: finalConfig.logging,
-  };
-
-  initPointerTracking(
-    pointerTrackingConfig,
-    siteName,
-    hostname,
-    envNodeEnv || 'production'
-  );
 }
