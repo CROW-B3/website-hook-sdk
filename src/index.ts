@@ -6,11 +6,11 @@
 // Main screenshot capture class
 export { ScreenshotCapture } from './screenshot';
 
-// Auto-capture functionality (legacy - for screenshots + pointer tracking)
+// Auto-capture functionality (periodic screenshots only)
 export { initAutoCapture } from './auto-capture';
 export type { AutoCaptureConfig } from './auto-capture';
 
-// Simplified interaction tracking (pointer movements only)
+// Interaction tracking (pointer movements tracking)
 export { initInteractionTracking } from './interaction-tracking';
 
 // Types and interfaces
