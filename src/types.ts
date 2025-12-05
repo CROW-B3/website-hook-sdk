@@ -163,12 +163,6 @@ export interface PointerCoordinateBatch {
   environment?: string;
 }
 
-/**
- * Simplified configuration for interaction tracking (pointer movements)
- *
- * NOTE: batchInterval and maxBatchSize are HARDCODED in the SDK for consistency.
- * Clients can only control logging to avoid affecting server load or data quality.
- */
 export interface InteractionTrackingConfig {
   logging?: boolean;
 }
