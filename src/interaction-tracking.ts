@@ -62,27 +62,6 @@ async function uploadPointerBatch(
   }
 }
 
-/**
- * Initializes interaction tracking to capture user pointer movements
- *
- * HARDCODED CONFIGURATION (cannot be changed by client):
- * - batchInterval: 1000ms (1 second)
- * - maxBatchSize: 1000 coordinates
- * - uploadUrl: Auto-detected from NEXT_PUBLIC_SCREENSHOT_UPLOAD_URL
- *
- * @param config - Configuration options (ONLY logging is configurable)
- *
- * @example
- * ```typescript
- * // Basic usage (logging disabled by default)
- * initInteractionTracking();
- *
- * // Enable debug logs (ONLY client-configurable option)
- * initInteractionTracking({
- *   logging: true  // Enable detailed debug logs
- * });
- * ```
- */
 export function initInteractionTracking(
   config: InteractionTrackingConfig = {}
 ): void {
@@ -194,7 +173,6 @@ export function initInteractionTracking(
     coordinateBuffer = [];
     batchStartTime = Date.now();
 
-    // Console.log for testing
     if (logging) {
       console.log(
         `[PointerTracking] Batch ready - ${batch.coordinates.length} coordinates over ${batchEndTime - batch.batchStartTime}ms`
