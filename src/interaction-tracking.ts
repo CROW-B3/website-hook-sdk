@@ -4,115 +4,233 @@ import type {
   InteractionTrackingConfig,
 } from './types';
 
-/**
- * Internal flag to track pointer tracking initialization
- */
-let isPointerTrackingInitialized = false;
+// ============================================================================
+// Constants
+// ============================================================================
+
+const BATCH_INTERVAL_MS = 1000;
+const MAX_BATCH_SIZE = 1000;
+const DEFAULT_UPLOAD_URL = 'http://localhost:3001';
+const LOG_PREFIX = '[InteractionTracking]';
+
+// ============================================================================
+// State Management
+// ============================================================================
+
+let isInitialized = false;
+const sessionId = generateSessionId();
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
 
 /**
- * Session ID for this capture session (generated once per page load)
+ * Generate unique session identifier
  */
-const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+function generateSessionId(): string {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 11);
+  return `session-${timestamp}-${random}`;
+}
 
 /**
- * Upload pointer coordinate batch to edge worker
+ * Check if code is running in browser environment
  */
-async function uploadPointerBatch(
+function isBrowserEnvironment(): boolean {
+  return typeof window !== 'undefined' && typeof document !== 'undefined';
+}
+
+/**
+ * Extract site information from current URL
+ */
+function getSiteInfo() {
+  const hostname = window.location.hostname;
+  const siteName = hostname.replace(/^www\./, '').split('.')[0];
+  return { hostname, siteName };
+}
+
+/**
+ * Get environment variable safely
+ */
+function getEnvVar(key: string): string | undefined {
+  // @ts-ignore - process.env may not exist in all environments
+  if (typeof process !== 'undefined' && typeof process.env !== 'undefined') {
+    // @ts-ignore
+    return process.env[key];
+  }
+  return undefined;
+}
+
+/**
+ * Build upload URL from environment configuration
+ */
+function buildUploadUrl(): string {
+  const envUploadUrl = getEnvVar('NEXT_PUBLIC_SCREENSHOT_UPLOAD_URL');
+  const baseUrl = envUploadUrl || DEFAULT_UPLOAD_URL;
+  const cleanBaseUrl = baseUrl.replace(/\/screenshot$/, '');
+  return `${cleanBaseUrl}/pointer-data`;
+}
+
+/**
+ * Get current environment name
+ */
+function getEnvironment(): string {
+  return getEnvVar('NODE_ENV') || 'production';
+}
+
+/**
+ * Create pointer coordinate from pointer event
+ */
+function createPointerCoordinate(event: PointerEvent): PointerCoordinate {
+  return {
+    timestamp: Date.now(),
+    clientX: event.clientX,
+    clientY: event.clientY,
+    pageX: event.pageX,
+    pageY: event.pageY,
+    pointerType: event.pointerType,
+    pressure: event.pressure,
+    pointerId: event.pointerId,
+  };
+}
+
+/**
+ * Create batch from buffer
+ */
+function createBatch(
+  coordinates: PointerCoordinate[],
+  startTime: number,
+  siteName: string,
+  hostname: string,
+  environment: string
+): PointerCoordinateBatch {
+  return {
+    sessionId,
+    coordinates: [...coordinates],
+    batchStartTime: startTime,
+    batchEndTime: Date.now(),
+    url: window.location.href,
+    site: siteName,
+    hostname,
+    environment,
+  };
+}
+
+/**
+ * Log batch information for debugging
+ */
+function logBatchInfo(batch: PointerCoordinateBatch, logging: boolean): void {
+  if (!logging) return;
+
+  const duration = batch.batchEndTime - batch.batchStartTime;
+  console.log(
+    `${LOG_PREFIX} Batch ready - ${batch.coordinates.length} coordinates over ${duration}ms`
+  );
+  console.log(`${LOG_PREFIX} Batch data:`, {
+    sessionId: batch.sessionId,
+    coordinateCount: batch.coordinates.length,
+    firstCoordinate: batch.coordinates[0],
+    lastCoordinate: batch.coordinates[batch.coordinates.length - 1],
+    url: batch.url,
+    site: batch.site,
+  });
+}
+
+/**
+ * Log upload details for debugging
+ */
+function logUploadAttempt(
+  batch: PointerCoordinateBatch,
+  logging: boolean
+): void {
+  if (!logging) return;
+
+  const duration = batch.batchEndTime - batch.batchStartTime;
+  console.log(`${LOG_PREFIX} Uploading batch:`, {
+    sessionId: batch.sessionId,
+    coordinates: batch.coordinates.length,
+    timeRange: `${batch.batchStartTime} - ${batch.batchEndTime}`,
+    duration: `${duration}ms`,
+  });
+  console.log(
+    `${LOG_PREFIX} First 5 coordinates:`,
+    batch.coordinates.slice(0, 5)
+  );
+  console.log(`${LOG_PREFIX} Last 5 coordinates:`, batch.coordinates.slice(-5));
+}
+
+/**
+ * Upload batch to server
+ */
+async function uploadBatch(
   batch: PointerCoordinateBatch,
   uploadUrl: string,
   logging: boolean
 ): Promise<void> {
   try {
-    if (logging) {
-      console.log('[PointerTracking] Uploading batch:', {
-        sessionId: batch.sessionId,
-        coordinates: batch.coordinates.length,
-        timeRange: `${batch.batchStartTime} - ${batch.batchEndTime}`,
-        duration: `${batch.batchEndTime - batch.batchStartTime}ms`,
-      });
-      console.log(
-        '[PointerTracking] First 5 coordinates:',
-        batch.coordinates.slice(0, 5)
-      );
-      console.log(
-        '[PointerTracking] Last 5 coordinates:',
-        batch.coordinates.slice(-5)
-      );
-    }
+    logUploadAttempt(batch, logging);
 
     const response = await fetch(uploadUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(batch),
     });
 
     if (response.ok) {
       if (logging) {
         console.log(
-          `[PointerTracking] Successfully uploaded ${batch.coordinates.length} coordinates`
+          `${LOG_PREFIX} Successfully uploaded ${batch.coordinates.length} coordinates`
         );
       }
     } else {
-      console.error('[PointerTracking] Upload failed:', response.statusText);
+      console.error(`${LOG_PREFIX} Upload failed:`, response.statusText);
     }
   } catch (error) {
-    console.error('[PointerTracking] Upload error:', error);
+    console.error(`${LOG_PREFIX} Upload error:`, error);
   }
 }
 
+// ============================================================================
+// Main Initialization Function
+// ============================================================================
+
+/**
+ * Initialize interaction tracking for pointer movements
+ *
+ * Configuration is hardcoded:
+ * - Batch interval: 1000ms
+ * - Max batch size: 1000 coordinates
+ * - Upload URL: Auto-detected from NEXT_PUBLIC_SCREENSHOT_UPLOAD_URL
+ *
+ * @param config - Only 'logging' option is configurable
+ */
 export function initInteractionTracking(
   config: InteractionTrackingConfig = {}
 ): void {
-  // Prevent multiple initializations
-  if (isPointerTrackingInitialized) {
+  if (isInitialized) {
     if (config.logging) {
-      console.warn('[InteractionTracking] Already initialized. Skipping...');
+      console.warn(`${LOG_PREFIX} Already initialized. Skipping...`);
     }
     return;
   }
 
-  // Check if running in browser
-  if (typeof window === 'undefined' || typeof document === 'undefined') {
-    console.error('[InteractionTracking] Must be run in browser environment');
+  if (!isBrowserEnvironment()) {
+    console.error(`${LOG_PREFIX} Must be run in browser environment`);
     return;
   }
 
-  isPointerTrackingInitialized = true;
+  isInitialized = true;
 
-  // Auto-detect site information from current URL
-  const hostname = window.location.hostname;
-  const siteName = hostname.replace(/^www\./, '').split('.')[0];
-
-  // Get upload URL from environment variable
-  // @ts-ignore - process.env may not exist in all environments
-  const envUploadUrl =
-    typeof process !== 'undefined' && typeof process.env !== 'undefined'
-      ? process.env.NEXT_PUBLIC_SCREENSHOT_UPLOAD_URL
-      : undefined;
-  const defaultUploadUrl = envUploadUrl || 'http://localhost:3001';
-  const baseWorkerUrl = defaultUploadUrl.replace(/\/screenshot$/, '');
-
-  // Get environment
-  // @ts-ignore - process.env may not exist in all environments
-  const environment =
-    typeof process !== 'undefined' && typeof process.env !== 'undefined'
-      ? process.env.NODE_ENV || 'production'
-      : 'production';
-
-  // HARDCODED Configuration (client cannot change these)
-  const batchInterval = 1000; // HARDCODED: 1 second batching
-  const maxBatchSize = 1000; // HARDCODED: 1000 coordinates max
-  const uploadUrl = `${baseWorkerUrl}/pointer-data`; // Auto-constructed from env var
-
-  // Client-configurable options (ONLY this can be changed by client)
+  // Extract configuration
+  const { hostname, siteName } = getSiteInfo();
+  const uploadUrl = buildUploadUrl();
+  const environment = getEnvironment();
   const logging = config.logging ?? false;
 
   if (logging) {
-    console.log('[InteractionTracking] Initializing with config:', {
-      batchInterval,
-      maxBatchSize,
+    console.log(`${LOG_PREFIX} Initializing with config:`, {
+      batchInterval: BATCH_INTERVAL_MS,
+      maxBatchSize: MAX_BATCH_SIZE,
       uploadUrl,
       sessionId,
       site: siteName,
@@ -121,97 +239,64 @@ export function initInteractionTracking(
     });
   }
 
-  // Buffer to store coordinates
+  // Initialize tracking state
   let coordinateBuffer: PointerCoordinate[] = [];
   let batchStartTime = Date.now();
 
-  // Pointer move event handler
-  const handlePointerMove = (event: PointerEvent) => {
-    const coordinate: PointerCoordinate = {
-      timestamp: Date.now(),
-      clientX: event.clientX,
-      clientY: event.clientY,
-      pageX: event.pageX,
-      pageY: event.pageY,
-      pointerType: event.pointerType,
-      pressure: event.pressure,
-      pointerId: event.pointerId,
-    };
+  // Create batch sender
+  const sendBatch = async (): Promise<void> => {
+    if (coordinateBuffer.length === 0) return;
 
-    coordinateBuffer.push(coordinate);
-
-    // If buffer exceeds max size, send immediately
-    if (coordinateBuffer.length >= maxBatchSize) {
-      if (logging) {
-        console.log(
-          `[PointerTracking] Buffer full (${coordinateBuffer.length} coordinates), sending immediately`
-        );
-      }
-      sendBatch();
-    }
-  };
-
-  // Function to send batched coordinates
-  const sendBatch = async () => {
-    if (coordinateBuffer.length === 0) {
-      return;
-    }
-
-    const batchEndTime = Date.now();
-    const batch: PointerCoordinateBatch = {
-      sessionId,
-      coordinates: [...coordinateBuffer],
+    const batch = createBatch(
+      coordinateBuffer,
       batchStartTime,
-      batchEndTime,
-      url: window.location.href,
-      site: siteName,
+      siteName,
       hostname,
-      environment,
-    };
+      environment
+    );
 
-    // Clear buffer
     coordinateBuffer = [];
     batchStartTime = Date.now();
 
-    if (logging) {
-      console.log(
-        `[PointerTracking] Batch ready - ${batch.coordinates.length} coordinates over ${batchEndTime - batch.batchStartTime}ms`
-      );
-      console.log('[PointerTracking] Batch data:', {
-        sessionId: batch.sessionId,
-        coordinateCount: batch.coordinates.length,
-        firstCoordinate: batch.coordinates[0],
-        lastCoordinate: batch.coordinates[batch.coordinates.length - 1],
-        url: batch.url,
-        site: batch.site,
-      });
-    }
-
-    // Upload to worker
-    await uploadPointerBatch(batch, uploadUrl, logging);
+    logBatchInfo(batch, logging);
+    await uploadBatch(batch, uploadUrl, logging);
   };
 
-  // Set up interval to send batches
-  setInterval(sendBatch, batchInterval);
+  // Create pointer event handler
+  const handlePointerMove = (event: PointerEvent): void => {
+    const coordinate = createPointerCoordinate(event);
+    coordinateBuffer.push(coordinate);
 
-  // Listen to pointer events
-  document.addEventListener('pointermove', handlePointerMove);
-
-  // Flush remaining coordinates on page unload
-  window.addEventListener('beforeunload', () => {
-    if (coordinateBuffer.length > 0) {
+    if (coordinateBuffer.length >= MAX_BATCH_SIZE) {
       if (logging) {
         console.log(
-          `[PointerTracking] Page unloading, flushing ${coordinateBuffer.length} coordinates`
+          `${LOG_PREFIX} Buffer full (${coordinateBuffer.length} coordinates), sending immediately`
         );
       }
       sendBatch();
     }
-  });
+  };
+
+  // Create unload handler
+  const handleBeforeUnload = (): void => {
+    if (coordinateBuffer.length > 0) {
+      if (logging) {
+        console.log(
+          `${LOG_PREFIX} Page unloading, flushing ${coordinateBuffer.length} coordinates`
+        );
+      }
+      sendBatch();
+    }
+  };
+
+  // Setup event listeners and interval
+  document.addEventListener('pointermove', handlePointerMove);
+  window.addEventListener('beforeunload', handleBeforeUnload);
+  setInterval(sendBatch, BATCH_INTERVAL_MS);
 
   if (logging) {
     console.log(
-      `[PointerTracking] Started tracking. Batches will be sent every ${batchInterval}ms (${batchInterval / 1000}s) or when buffer reaches ${maxBatchSize} coordinates`
+      `${LOG_PREFIX} Started tracking. Batches will be sent every ${BATCH_INTERVAL_MS}ms or when buffer reaches ${MAX_BATCH_SIZE} coordinates`
     );
   }
 }
