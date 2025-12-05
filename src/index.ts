@@ -6,7 +6,7 @@
 // Main screenshot capture class
 export { ScreenshotCapture } from './screenshot';
 
-// Auto-capture functionality (periodic screenshots only)
+// Auto-capture functionality
 export { initAutoCapture } from './auto-capture';
 export type { AutoCaptureConfig } from './auto-capture';
 
