@@ -10,8 +10,8 @@ export { ScreenshotCapture } from './screenshot';
 export { initAutoCapture } from './auto-capture';
 export type { AutoCaptureConfig } from './auto-capture';
 
-// Interaction tracking (pointer movements tracking)
-export { initInteractionTracking } from './interaction-tracking';
+// Pointer tracking (mouse/touch/pen movement tracking)
+export { initPointerTracking } from './pointer-tracking';
 
 // Types and interfaces
 export type {
@@ -20,7 +20,7 @@ export type {
   SaveOptions,
   PointerCoordinate,
   PointerCoordinateBatch,
-  InteractionTrackingConfig,
+  PointerTrackingConfig,
 } from './types';
 
 // Error types

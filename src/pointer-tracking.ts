@@ -1,13 +1,13 @@
 import type {
   PointerCoordinate,
   PointerCoordinateBatch,
-  InteractionTrackingConfig,
+  PointerTrackingConfig,
 } from './types';
 
 const BATCH_INTERVAL_MS = 1000;
 const MAX_BATCH_SIZE = 1000;
 const DEFAULT_UPLOAD_URL = 'http://localhost:3001';
-const LOG_PREFIX = '[InteractionTracking]';
+const LOG_PREFIX = '[PointerTracking]';
 
 let isInitialized = false;
 const sessionId = generateSessionId();
@@ -175,9 +175,7 @@ async function uploadBatch(
   }
 }
 
-export function initInteractionTracking(
-  config: InteractionTrackingConfig = {}
-): void {
+export function initPointerTracking(config: PointerTrackingConfig = {}): void {
   if (isInitialized) {
     if (config.logging) {
       console.warn(`${LOG_PREFIX} Already initialized. Skipping...`);

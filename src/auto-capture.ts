@@ -100,7 +100,7 @@ async function uploadScreenshot(
 
 /**
  * Initializes periodic screenshot auto-capture
- * Note: For pointer tracking, use initInteractionTracking instead
+ * Note: For pointer tracking, use initPointerTracking instead
  */
 export function initAutoCapture(config: AutoCaptureConfig = {}): void {
   if (isInitialized) {

@@ -163,6 +163,6 @@ export interface PointerCoordinateBatch {
   environment?: string;
 }
 
-export interface InteractionTrackingConfig {
+export interface PointerTrackingConfig {
   logging?: boolean;
 }
