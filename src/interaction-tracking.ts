@@ -4,29 +4,14 @@ import type {
   InteractionTrackingConfig,
 } from './types';
 
-// ============================================================================
-// Constants
-// ============================================================================
-
 const BATCH_INTERVAL_MS = 1000;
 const MAX_BATCH_SIZE = 1000;
 const DEFAULT_UPLOAD_URL = 'http://localhost:3001';
 const LOG_PREFIX = '[InteractionTracking]';
 
-// ============================================================================
-// State Management
-// ============================================================================
-
 let isInitialized = false;
 const sessionId = generateSessionId();
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Generate unique session identifier
- */
 function generateSessionId(): string {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 11);
@@ -190,20 +175,6 @@ async function uploadBatch(
   }
 }
 
-// ============================================================================
-// Main Initialization Function
-// ============================================================================
-
-/**
- * Initialize interaction tracking for pointer movements
- *
- * Configuration is hardcoded:
- * - Batch interval: 1000ms
- * - Max batch size: 1000 coordinates
- * - Upload URL: Auto-detected from NEXT_PUBLIC_SCREENSHOT_UPLOAD_URL
- *
- * @param config - Only 'logging' option is configurable
- */
 export function initInteractionTracking(
   config: InteractionTrackingConfig = {}
 ): void {
