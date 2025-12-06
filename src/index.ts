@@ -3,9 +3,9 @@
  * A lightweight SDK for capturing user interactions and screenshots on web pages
  */
 
-// Auto-capture functionality (periodic screenshot capture)
-export { initAutoCapture } from './auto-capture';
-export type { AutoCaptureConfig } from './auto-capture';
+// Visual telemetry functionality (periodic viewport capture with rich metadata)
+export { initAutoCapture } from './visual-telemetry';
+export type { AutoCaptureConfig } from './visual-telemetry';
 
 // Pointer tracking (mouse/touch/pen movement tracking)
 export { initPointerTracking } from './pointer-tracking';
