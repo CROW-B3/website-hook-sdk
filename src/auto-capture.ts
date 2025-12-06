@@ -1,5 +1,4 @@
 import html2canvas from 'html2canvas-pro';
-import { downloadFile } from './utils';
 
 /** Auto-capture configuration */
 export interface AutoCaptureConfig {
@@ -8,7 +7,6 @@ export interface AutoCaptureConfig {
   viewportOnly?: boolean;
   uploadUrl?: string;
   uploadMetadata?: Record<string, any>;
-  downloadOnUploadFail?: boolean;
   useCORS?: boolean;
   backgroundColor?: string;
   scale?: number;
@@ -147,13 +145,20 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
     viewportOnly: config.viewportOnly ?? true,
     uploadUrl: config.uploadUrl ?? defaultUploadUrl,
     uploadMetadata: defaultMetadata,
-    downloadOnUploadFail: config.downloadOnUploadFail ?? true,
     useCORS: config.useCORS ?? true,
     backgroundColor: config.backgroundColor ?? '#ffffff',
     scale: config.scale ?? window.devicePixelRatio,
     quality: config.quality ?? 0.92,
     logging: config.logging ?? false,
   };
+
+  // Warn if no upload URL is provided
+  if (!finalConfig.uploadUrl) {
+    console.warn(
+      '[AutoCapture] No uploadUrl provided. Screenshots will not be captured or uploaded. Please provide an uploadUrl in the configuration.'
+    );
+    return;
+  }
 
   if (finalConfig.logging) {
     console.log('[AutoCapture] Initialized with config:', finalConfig);
@@ -216,35 +221,18 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
         const blob = await canvasToBlob(canvas, finalConfig.quality);
         const filename = `${filenameBase}.png`;
 
-        if (finalConfig.uploadUrl) {
-          const uploadSuccess = await uploadScreenshot(
-            blob,
-            filename,
-            finalConfig.uploadUrl,
-            captureMetadata,
-            finalConfig.logging
+        const uploadSuccess = await uploadScreenshot(
+          blob,
+          filename,
+          finalConfig.uploadUrl,
+          captureMetadata,
+          finalConfig.logging
+        );
+
+        if (!uploadSuccess) {
+          console.error(
+            '[AutoCapture] Upload failed. Continuing with next capture...'
           );
-
-          // Fallback: download locally if upload fails
-          if (!uploadSuccess && finalConfig.downloadOnUploadFail) {
-            if (finalConfig.logging) {
-              console.log(
-                '[AutoCapture] Upload failed, downloading locally...'
-              );
-            }
-            downloadFile(blob, filename);
-          }
-        } else {
-          downloadFile(blob, filename);
-
-          if (finalConfig.logging) {
-            console.log('[AutoCapture] Screenshot downloaded successfully!', {
-              width: canvas.width,
-              height: canvas.height,
-              filename,
-              size: `${(blob.size / 1024).toFixed(2)} KB`,
-            });
-          }
         }
       } else {
         // Full page capture
@@ -272,35 +260,18 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
         const blob = await canvasToBlob(canvas, finalConfig.quality);
         const filename = `${filenameBase}.png`;
 
-        if (finalConfig.uploadUrl) {
-          const uploadSuccess = await uploadScreenshot(
-            blob,
-            filename,
-            finalConfig.uploadUrl,
-            captureMetadata,
-            finalConfig.logging
+        const uploadSuccess = await uploadScreenshot(
+          blob,
+          filename,
+          finalConfig.uploadUrl,
+          captureMetadata,
+          finalConfig.logging
+        );
+
+        if (!uploadSuccess) {
+          console.error(
+            '[AutoCapture] Upload failed. Continuing with next capture...'
           );
-
-          // Fallback: download locally if upload fails
-          if (!uploadSuccess && finalConfig.downloadOnUploadFail) {
-            if (finalConfig.logging) {
-              console.log(
-                '[AutoCapture] Upload failed, downloading locally...'
-              );
-            }
-            downloadFile(blob, filename);
-          }
-        } else {
-          downloadFile(blob, filename);
-
-          if (finalConfig.logging) {
-            console.log('[AutoCapture] Screenshot downloaded successfully!', {
-              width: canvas.width,
-              height: canvas.height,
-              filename,
-              size: `${(blob.size / 1024).toFixed(2)} KB`,
-            });
-          }
         }
       }
     } catch (error) {
