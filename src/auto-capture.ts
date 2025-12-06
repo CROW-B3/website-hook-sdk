@@ -1,87 +1,23 @@
 import html2canvas from 'html2canvas-pro';
 import { downloadFile } from './utils';
 
-/**
- * Configuration for auto-capture functionality
- */
+/** Auto-capture configuration */
 export interface AutoCaptureConfig {
-  /**
-   * Interval in milliseconds for continuous screenshot capture
-   * If set, screenshots will be captured repeatedly at this interval
-   * @default 100 (100ms) - captures 10 times per second for stress testing
-   */
-  interval?: number;
-
-  /**
-   * Filename for the screenshot (without extension)
-   * @default 'screenshot-{timestamp}'
-   */
+  interval?: number | null;
   filename?: string;
-
-  /**
-   * Capture only the visible viewport area instead of the full page
-   * @default false (captures full page)
-   */
   viewportOnly?: boolean;
-
-  /**
-   * Cloudflare Edge Worker URL to upload screenshot
-   * If provided, screenshot will be uploaded instead of downloaded
-   * @example 'https://your-worker.workers.dev/screenshot'
-   */
   uploadUrl?: string;
-
-  /**
-   * Additional metadata to send with the screenshot upload
-   * @default {}
-   */
   uploadMetadata?: Record<string, any>;
-
-  /**
-   * Download screenshot locally if upload fails
-   * @default true
-   */
   downloadOnUploadFail?: boolean;
-
-  /**
-   * Enable CORS for external images
-   * @default true
-   */
   useCORS?: boolean;
-
-  /**
-   * Background color for transparent elements
-   * @default '#ffffff'
-   */
   backgroundColor?: string;
-
-  /**
-   * Scale factor for higher resolution screenshots
-   * @default window.devicePixelRatio
-   */
   scale?: number;
-
-  /**
-   * Image quality (0-1)
-   * @default 0.92
-   */
   quality?: number;
-
-  /**
-   * Enable logging for debugging
-   * @default false
-   */
   logging?: boolean;
 }
 
-/**
- * Internal flag to prevent multiple initializations
- */
 let isInitialized = false;
 
-/**
- * Converts canvas to blob
- */
 async function canvasToBlob(
   canvas: HTMLCanvasElement,
   quality: number
@@ -101,9 +37,7 @@ async function canvasToBlob(
   });
 }
 
-/**
- * Upload screenshot to edge worker using FormData
- */
+/** Upload screenshot to edge worker */
 async function uploadScreenshot(
   blob: Blob,
   filename: string,
@@ -116,7 +50,6 @@ async function uploadScreenshot(
       console.log('[AutoCapture] Uploading screenshot to:', uploadUrl);
     }
 
-    // Create FormData with screenshot and metadata
     const formData = new FormData();
     formData.append('screenshot', blob, filename);
     formData.append('filename', filename);
@@ -133,7 +66,6 @@ async function uploadScreenshot(
       })
     );
 
-    // Add custom metadata
     Object.entries(metadata).forEach(([key, value]) => {
       formData.append(
         key,
@@ -141,7 +73,6 @@ async function uploadScreenshot(
       );
     });
 
-    // Upload to edge worker
     const response = await fetch(uploadUrl, {
       method: 'POST',
       body: formData,
@@ -168,25 +99,10 @@ async function uploadScreenshot(
 }
 
 /**
- * Initializes auto-capture functionality that takes screenshots immediately and optionally continuously
- *
- * @param config - Configuration options for auto-capture
- *
- * @example
- * ```typescript
- * // Basic usage - captures every 100ms (default stress test mode)
- * initAutoCapture();
- *
- * // Custom interval (every 5 seconds)
- * initAutoCapture({
- *   interval: 5000,
- *   filename: 'my-website-screenshot',
- *   logging: true
- * });
- * ```
+ * Initializes periodic screenshot auto-capture
+ * Note: For pointer tracking, use initPointerTracking instead
  */
 export function initAutoCapture(config: AutoCaptureConfig = {}): void {
-  // Prevent multiple initializations
   if (isInitialized) {
     if (config.logging) {
       console.warn('[AutoCapture] Already initialized. Skipping...');
@@ -194,7 +110,6 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
     return;
   }
 
-  // Check if running in browser
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     console.error('[AutoCapture] Must be run in browser environment');
     return;
@@ -202,11 +117,9 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
 
   isInitialized = true;
 
-  // Auto-detect site information from current URL
   const hostname = window.location.hostname;
   const siteName = hostname.replace(/^www\./, '').split('.')[0];
 
-  // Get upload URL from environment variable or config
   // @ts-ignore - process.env may not exist in all environments
   const envUploadUrl =
     typeof process !== 'undefined' && typeof process.env !== 'undefined'
@@ -214,7 +127,6 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
       : undefined;
   const defaultUploadUrl = envUploadUrl || 'http://localhost:3001/screenshot';
 
-  // Auto-generate metadata based on current site
   // @ts-ignore - process.env may not exist in all environments
   const envNodeEnv =
     typeof process !== 'undefined' && typeof process.env !== 'undefined'
@@ -226,12 +138,11 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
     environment: envNodeEnv || 'production',
     timestamp: Date.now(),
     userAgent: navigator.userAgent,
-    ...config.uploadMetadata, // Allow override
+    ...config.uploadMetadata,
   };
 
-  // Default configuration
   const finalConfig = {
-    interval: config.interval ?? 100, // Default to 100ms for stress testing
+    interval: 300,
     filename: config.filename ?? `${siteName}-screenshot-${Date.now()}`,
     viewportOnly: config.viewportOnly ?? true,
     uploadUrl: config.uploadUrl ?? defaultUploadUrl,
@@ -248,22 +159,18 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
     console.log('[AutoCapture] Initialized with config:', finalConfig);
   }
 
-  // Define the capture function that will be called repeatedly
   const captureScreenshot = async () => {
     try {
-      // Generate unique filename with timestamp for each capture
       const timestamp = Date.now();
       const filenameBase = `${siteName}-screenshot-${timestamp}`;
 
-      // Update metadata timestamp for each capture
       const captureMetadata = {
         ...defaultMetadata,
         timestamp,
       };
 
-      // If viewportOnly is true, capture only the visible area at current scroll position
+      // Viewport-only: capture current visible area
       if (finalConfig.viewportOnly) {
-        // Get current scroll position
         const scrollX = window.scrollX || window.pageXOffset || 0;
         const scrollY = window.scrollY || window.pageYOffset || 0;
         const viewportWidth = window.innerWidth;
@@ -281,7 +188,6 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
           );
         }
 
-        // Capture the documentElement (html tag) with viewport crop
         const canvas = await html2canvas(document.documentElement, {
           useCORS: finalConfig.useCORS,
           allowTaint: false,
@@ -307,11 +213,9 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
           );
         }
 
-        // Convert to blob
         const blob = await canvasToBlob(canvas, finalConfig.quality);
         const filename = `${filenameBase}.png`;
 
-        // Upload to edge worker if URL is provided
         if (finalConfig.uploadUrl) {
           const uploadSuccess = await uploadScreenshot(
             blob,
@@ -321,7 +225,7 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
             finalConfig.logging
           );
 
-          // Fallback to download if upload fails and fallback is enabled
+          // Fallback: download locally if upload fails
           if (!uploadSuccess && finalConfig.downloadOnUploadFail) {
             if (finalConfig.logging) {
               console.log(
@@ -331,7 +235,6 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
             downloadFile(blob, filename);
           }
         } else {
-          // No upload URL, download locally
           downloadFile(blob, filename);
 
           if (finalConfig.logging) {
@@ -344,7 +247,7 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
           }
         }
       } else {
-        // Capture full page
+        // Full page capture
         if (finalConfig.logging) {
           console.log('[AutoCapture] Capturing full page');
         }
@@ -366,11 +269,9 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
           );
         }
 
-        // Convert to blob
         const blob = await canvasToBlob(canvas, finalConfig.quality);
         const filename = `${filenameBase}.png`;
 
-        // Upload to edge worker if URL is provided
         if (finalConfig.uploadUrl) {
           const uploadSuccess = await uploadScreenshot(
             blob,
@@ -380,7 +281,7 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
             finalConfig.logging
           );
 
-          // Fallback to download if upload fails and fallback is enabled
+          // Fallback: download locally if upload fails
           if (!uploadSuccess && finalConfig.downloadOnUploadFail) {
             if (finalConfig.logging) {
               console.log(
@@ -390,7 +291,6 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
             downloadFile(blob, filename);
           }
         } else {
-          // No upload URL, download locally
           downloadFile(blob, filename);
 
           if (finalConfig.logging) {
@@ -408,22 +308,25 @@ export function initAutoCapture(config: AutoCaptureConfig = {}): void {
     }
   };
 
-  // Capture first screenshot immediately
-  if (finalConfig.logging) {
-    console.log('[AutoCapture] Capturing screenshot immediately...');
-  }
-  captureScreenshot();
+  // Start interval-based capture if enabled
+  if (finalConfig.interval && finalConfig.interval > 0) {
+    if (finalConfig.logging) {
+      console.log('[AutoCapture] Capturing first screenshot immediately...');
+    }
+    captureScreenshot();
 
-  // Set up continuous capture if interval is specified
-  if (finalConfig.interval) {
     if (finalConfig.logging) {
       console.log(
-        `[AutoCapture] Setting up continuous capture every ${finalConfig.interval}ms`
+        `[AutoCapture] Setting up continuous screenshot capture every ${finalConfig.interval}ms`
       );
     }
 
     setInterval(() => {
       captureScreenshot();
     }, finalConfig.interval);
+  } else {
+    if (finalConfig.logging) {
+      console.log('[AutoCapture] Screenshot capture DISABLED (interval: null)');
+    }
   }
 }

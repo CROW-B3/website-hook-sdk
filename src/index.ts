@@ -10,8 +10,18 @@ export { ScreenshotCapture } from './screenshot';
 export { initAutoCapture } from './auto-capture';
 export type { AutoCaptureConfig } from './auto-capture';
 
+// Pointer tracking (mouse/touch/pen movement tracking)
+export { initPointerTracking } from './pointer-tracking';
+
 // Types and interfaces
-export type { ScreenshotConfig, ScreenshotResult, SaveOptions } from './types';
+export type {
+  ScreenshotConfig,
+  ScreenshotResult,
+  SaveOptions,
+  PointerCoordinate,
+  PointerCoordinateBatch,
+  PointerTrackingConfig,
+} from './types';
 
 // Error types
 export { ScreenshotError, ScreenshotErrorType } from './types';
