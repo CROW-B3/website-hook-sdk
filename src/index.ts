@@ -16,14 +16,3 @@ export type {
   PointerCoordinateBatch,
   PointerTrackingConfig,
 } from './types';
-
-// Utility functions (optional exports for advanced users)
-export {
-  waitForPageLoad,
-  waitForImages,
-  downloadFile,
-  getImagesInElement,
-  checkBrowserSupport,
-  formatFileSize,
-  generateTimestampFilename,
-} from './utils';
