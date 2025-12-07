@@ -16,6 +16,7 @@ build/
 # Package manager files
 package-lock.json
 yarn.lock
+bun.lock
 
 # IDE files
 .vscode/
