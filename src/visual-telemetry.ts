@@ -5,6 +5,7 @@ import {
   getEnvVar,
   getEnvironment,
 } from './utils/environment';
+import { DEFAULT_SCREENSHOT_UPLOAD_URL } from './utils/constants';
 
 /** Auto-capture configuration */
 export interface AutoCaptureConfig {
@@ -22,7 +23,6 @@ export interface AutoCaptureConfig {
 
 // Constants
 const DEFAULT_INTERVAL_MS = 300;
-const DEFAULT_UPLOAD_URL = 'http://localhost:3001/screenshot';
 const DEFAULT_QUALITY = 0.92;
 const DEFAULT_BACKGROUND_COLOR = '#ffffff';
 const LOG_PREFIX = '[VisualTelemetry]';
@@ -34,7 +34,7 @@ let isInitialized = false;
  */
 function buildUploadUrl(configUrl?: string): string {
   const envUploadUrl = getEnvVar('NEXT_PUBLIC_SCREENSHOT_UPLOAD_URL');
-  return configUrl ?? envUploadUrl ?? DEFAULT_UPLOAD_URL;
+  return configUrl ?? envUploadUrl ?? DEFAULT_SCREENSHOT_UPLOAD_URL;
 }
 
 /**

@@ -36,10 +36,13 @@ import {
   getEnvVar,
   getEnvironment,
 } from './utils/environment';
+import {
+  DEFAULT_BASE_UPLOAD_URL,
+  POINTER_DATA_ENDPOINT,
+} from './utils/constants';
 
 const BATCH_INTERVAL_MS = 1000;
 const MAX_BATCH_SIZE = 1000;
-const DEFAULT_UPLOAD_URL = 'http://localhost:3001';
 const LOG_PREFIX = '[PointerTracking]';
 
 let isInitialized = false;
@@ -56,9 +59,9 @@ function generateSessionId(): string {
  */
 function buildUploadUrl(): string {
   const envUploadUrl = getEnvVar('NEXT_PUBLIC_SCREENSHOT_UPLOAD_URL');
-  const baseUrl = envUploadUrl || DEFAULT_UPLOAD_URL;
+  const baseUrl = envUploadUrl || DEFAULT_BASE_UPLOAD_URL;
   const cleanBaseUrl = baseUrl.replace(/\/screenshot$/, '');
-  return `${cleanBaseUrl}/pointer-data`;
+  return `${cleanBaseUrl}${POINTER_DATA_ENDPOINT}`;
 }
 
 /**
