@@ -3,6 +3,12 @@ import type {
   PointerCoordinateBatch,
   PointerTrackingConfig,
 } from './types';
+import {
+  isBrowserEnvironment,
+  getSiteInfo,
+  getEnvVar,
+  getEnvironment,
+} from './utils/environment';
 
 const BATCH_INTERVAL_MS = 1000;
 const MAX_BATCH_SIZE = 1000;
@@ -19,34 +25,6 @@ function generateSessionId(): string {
 }
 
 /**
- * Check if code is running in browser environment
- */
-function isBrowserEnvironment(): boolean {
-  return typeof window !== 'undefined' && typeof document !== 'undefined';
-}
-
-/**
- * Extract site information from current URL
- */
-function getSiteInfo() {
-  const hostname = window.location.hostname;
-  const siteName = hostname.replace(/^www\./, '').split('.')[0];
-  return { hostname, siteName };
-}
-
-/**
- * Get environment variable safely
- */
-function getEnvVar(key: string): string | undefined {
-  // @ts-ignore - process.env may not exist in all environments
-  if (typeof process !== 'undefined' && typeof process.env !== 'undefined') {
-    // @ts-ignore
-    return process.env[key];
-  }
-  return undefined;
-}
-
-/**
  * Build upload URL from environment configuration
  */
 function buildUploadUrl(): string {
@@ -54,13 +32,6 @@ function buildUploadUrl(): string {
   const baseUrl = envUploadUrl || DEFAULT_UPLOAD_URL;
   const cleanBaseUrl = baseUrl.replace(/\/screenshot$/, '');
   return `${cleanBaseUrl}/pointer-data`;
-}
-
-/**
- * Get current environment name
- */
-function getEnvironment(): string {
-  return getEnvVar('NODE_ENV') || 'production';
 }
 
 /**

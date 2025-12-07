@@ -1,4 +1,10 @@
 import html2canvas from 'html2canvas-pro';
+import {
+  isBrowserEnvironment,
+  getSiteInfo,
+  getEnvVar,
+  getEnvironment,
+} from './utils/environment';
 
 /** Auto-capture configuration */
 export interface AutoCaptureConfig {
@@ -22,41 +28,6 @@ const DEFAULT_BACKGROUND_COLOR = '#ffffff';
 const LOG_PREFIX = '[VisualTelemetry]';
 
 let isInitialized = false;
-
-/**
- * Check if code is running in browser environment
- */
-function isBrowserEnvironment(): boolean {
-  return typeof window !== 'undefined' && typeof document !== 'undefined';
-}
-
-/**
- * Extract site information from current URL
- */
-function getSiteInfo() {
-  const hostname = window.location.hostname;
-  const siteName = hostname.replace(/^www\./, '').split('.')[0];
-  return { hostname, siteName };
-}
-
-/**
- * Get environment variable safely
- */
-function getEnvVar(key: string): string | undefined {
-  // @ts-ignore - process.env may not exist in all environments
-  if (typeof process !== 'undefined' && typeof process.env !== 'undefined') {
-    // @ts-ignore
-    return process.env[key];
-  }
-  return undefined;
-}
-
-/**
- * Get current environment name
- */
-function getEnvironment(): string {
-  return getEnvVar('NODE_ENV') || 'production';
-}
 
 /**
  * Build upload URL from environment or config
