@@ -1,4 +1,5 @@
 import html2canvas from 'html2canvas-pro';
+import ky from 'ky';
 import {
   isBrowserEnvironment,
   getSiteInfo,
@@ -146,67 +147,40 @@ export namespace VisualTelemetry {
   }
 
   /**
-   * Log upload success
+   * Upload screenshot to server (fire-and-forget)
    */
-  function logUploadSuccess(
-    status: number,
-    blobSize: number,
-    logging: boolean
-  ): void {
-    if (!logging) return;
-    console.log(`${LOG_PREFIX} Screenshot uploaded successfully!`, {
-      status: status,
-      size: `${(blobSize / 1024).toFixed(2)} KB`,
-    });
-  }
-
-  /**
-   * Upload screenshot to server
-   */
-  async function uploadScreenshot(
+  function uploadScreenshot(
     blob: Blob,
     filename: string,
     uploadUrl: string,
     metadata: Record<string, any>,
     logging: boolean
-  ): Promise<boolean> {
-    try {
-      logUploadAttempt(uploadUrl, logging);
+  ): void {
+    logUploadAttempt(uploadUrl, logging);
 
-      const formData = new FormData();
-      formData.append('screenshot', blob, filename);
-      formData.append('filename', filename);
-      formData.append('timestamp', Date.now().toString());
-      formData.append('url', window.location.href);
-      formData.append('userAgent', navigator.userAgent);
+    const formData = new FormData();
+    formData.append('screenshot', blob, filename);
+    formData.append('filename', filename);
+    formData.append('timestamp', Date.now().toString());
+    formData.append('url', window.location.href);
+    formData.append('userAgent', navigator.userAgent);
 
-      const viewport = getViewportInfo();
-      formData.append('viewport', JSON.stringify(viewport));
+    const viewport = getViewportInfo();
+    formData.append('viewport', JSON.stringify(viewport));
 
-      Object.entries(metadata).forEach(([key, value]) => {
-        formData.append(
-          key,
-          typeof value === 'string' ? value : JSON.stringify(value)
-        );
-      });
+    Object.entries(metadata).forEach(([key, value]) => {
+      formData.append(
+        key,
+        typeof value === 'string' ? value : JSON.stringify(value)
+      );
+    });
 
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          `Upload failed: ${response.status} ${response.statusText}`
-        );
-      }
-
-      logUploadSuccess(response.status, blob.size, logging);
-      return true;
-    } catch (error) {
+    // Fire and forget - send data without waiting for response
+    ky.post(uploadUrl, {
+      body: formData,
+    }).catch(error => {
       console.error(`${LOG_PREFIX} Failed to upload screenshot:`, error);
-      return false;
-    }
+    });
   }
 
   /**
@@ -254,19 +228,14 @@ export namespace VisualTelemetry {
     const blob = await canvasToBlob(canvas, config.quality);
     const filename = `${filenameBase}.png`;
 
-    const uploadSuccess = await uploadScreenshot(
+    // Fire and forget upload
+    uploadScreenshot(
       blob,
       filename,
       config.uploadUrl,
       captureMetadata,
       config.logging
     );
-
-    if (!uploadSuccess) {
-      console.error(
-        `${LOG_PREFIX} Upload failed. Continuing with next capture...`
-      );
-    }
   }
 
   /**
@@ -307,19 +276,14 @@ export namespace VisualTelemetry {
     const blob = await canvasToBlob(canvas, config.quality);
     const filename = `${filenameBase}.png`;
 
-    const uploadSuccess = await uploadScreenshot(
+    // Fire and forget upload
+    uploadScreenshot(
       blob,
       filename,
       config.uploadUrl,
       captureMetadata,
       config.logging
     );
-
-    if (!uploadSuccess) {
-      console.error(
-        `${LOG_PREFIX} Upload failed. Continuing with next capture...`
-      );
-    }
   }
 
   /**

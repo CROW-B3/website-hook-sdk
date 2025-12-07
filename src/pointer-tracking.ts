@@ -1,3 +1,4 @@
+import ky from 'ky';
 import {
   isBrowserEnvironment,
   getSiteInfo,
@@ -146,34 +147,21 @@ export namespace PointerTracking {
   }
 
   /**
-   * Upload batch to server
+   * Upload batch to server (fire-and-forget)
    */
-  async function uploadBatch(
+  function uploadBatch(
     batch: CoordinateBatch,
     uploadUrl: string,
     logging: boolean
-  ): Promise<void> {
-    try {
-      logUploadAttempt(batch, logging);
+  ): void {
+    logUploadAttempt(batch, logging);
 
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(batch),
-      });
-
-      if (response.ok) {
-        if (logging) {
-          console.log(
-            `${LOG_PREFIX} Successfully uploaded ${batch.coordinates.length} coordinates`
-          );
-        }
-      } else {
-        console.error(`${LOG_PREFIX} Upload failed:`, response.statusText);
-      }
-    } catch (error) {
+    // Fire and forget - send data without waiting for response
+    ky.post(uploadUrl, {
+      json: batch,
+    }).catch(error => {
       console.error(`${LOG_PREFIX} Upload error:`, error);
-    }
+    });
   }
 
   /**
@@ -217,7 +205,7 @@ export namespace PointerTracking {
     let batchStartTime = Date.now();
 
     // Create batch sender
-    const sendBatch = async (): Promise<void> => {
+    const sendBatch = (): void => {
       if (coordinateBuffer.length === 0) return;
 
       const batch = createBatch(
@@ -232,7 +220,7 @@ export namespace PointerTracking {
       batchStartTime = Date.now();
 
       logBatchInfo(batch, logging);
-      await uploadBatch(batch, uploadUrl, logging);
+      uploadBatch(batch, uploadUrl, logging);
     };
 
     // Create pointer event handler
