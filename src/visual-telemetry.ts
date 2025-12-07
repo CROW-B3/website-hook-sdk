@@ -5,7 +5,7 @@ import {
   getEnvVar,
   getEnvironment,
 } from './utils/environment';
-import { DEFAULT_SCREENSHOT_UPLOAD_URL } from './utils/constants';
+import { NEXT_BASE_URL, ENDPOINT_PATHS } from './utils/constants';
 
 /** Auto-capture configuration */
 export interface AutoCaptureConfig {
@@ -33,8 +33,11 @@ let isInitialized = false;
  * Build upload URL from environment or config
  */
 function buildUploadUrl(configUrl?: string): string {
-  const envUploadUrl = getEnvVar('NEXT_PUBLIC_SCREENSHOT_UPLOAD_URL');
-  return configUrl ?? envUploadUrl ?? DEFAULT_SCREENSHOT_UPLOAD_URL;
+  if (configUrl) return configUrl;
+
+  const envBaseUrl = getEnvVar('NEXT_PUBLIC_BE_BASE_URL');
+  const baseUrl = envBaseUrl || NEXT_BASE_URL;
+  return `${baseUrl}${ENDPOINT_PATHS.SCREENSHOTS}`;
 }
 
 /**

@@ -1,18 +1,24 @@
 /**
- * Upload URL constants used across the SDK
+ * Backend URL constants used across the SDK
+ * These point to the web-ingest-worker service
  */
 
-/** Base upload URL for all endpoints */
-export const DEFAULT_BASE_UPLOAD_URL = 'http://localhost:3001';
+/**
+ * Base URL for the backend (web-ingest-worker)
+ * Can be overridden via NEXT_PUBLIC_BE_BASE_URL environment variable
+ */
+export const NEXT_BASE_URL = 'http://localhost:3001';
 
-/** Screenshot upload endpoint */
-export const SCREENSHOT_ENDPOINT = '/screenshot';
-
-/** Pointer data upload endpoint */
-export const POINTER_DATA_ENDPOINT = '/pointer-data';
+/** Endpoint path segments - centralized for easy refactoring */
+export const ENDPOINT_PATHS = {
+  /** Screenshot upload endpoint path */
+  SCREENSHOTS: '/screenshots',
+  /** Pointer data upload endpoint path */
+  POINTER_DATA: '/pointer-data',
+} as const;
 
 /** Full default screenshot upload URL */
-export const DEFAULT_SCREENSHOT_UPLOAD_URL = `${DEFAULT_BASE_UPLOAD_URL}${SCREENSHOT_ENDPOINT}`;
+export const DEFAULT_SCREENSHOT_UPLOAD_URL = `${NEXT_BASE_URL}${ENDPOINT_PATHS.SCREENSHOTS}`;
 
 /** Full default pointer data upload URL */
-export const DEFAULT_POINTER_DATA_UPLOAD_URL = `${DEFAULT_BASE_UPLOAD_URL}${POINTER_DATA_ENDPOINT}`;
+export const DEFAULT_POINTER_DATA_UPLOAD_URL = `${NEXT_BASE_URL}${ENDPOINT_PATHS.POINTER_DATA}`;

@@ -36,10 +36,7 @@ import {
   getEnvVar,
   getEnvironment,
 } from './utils/environment';
-import {
-  DEFAULT_BASE_UPLOAD_URL,
-  POINTER_DATA_ENDPOINT,
-} from './utils/constants';
+import { NEXT_BASE_URL, ENDPOINT_PATHS } from './utils/constants';
 
 const BATCH_INTERVAL_MS = 1000;
 const MAX_BATCH_SIZE = 1000;
@@ -58,10 +55,9 @@ function generateSessionId(): string {
  * Build upload URL from environment configuration
  */
 function buildUploadUrl(): string {
-  const envUploadUrl = getEnvVar('NEXT_PUBLIC_SCREENSHOT_UPLOAD_URL');
-  const baseUrl = envUploadUrl || DEFAULT_BASE_UPLOAD_URL;
-  const cleanBaseUrl = baseUrl.replace(/\/screenshot$/, '');
-  return `${cleanBaseUrl}${POINTER_DATA_ENDPOINT}`;
+  const envBaseUrl = getEnvVar('NEXT_PUBLIC_BE_BASE_URL');
+  const baseUrl = envBaseUrl || NEXT_BASE_URL;
+  return `${baseUrl}${ENDPOINT_PATHS.POINTER_DATA}`;
 }
 
 /**
