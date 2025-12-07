@@ -15,4 +15,4 @@ export type {
   PointerCoordinate,
   PointerCoordinateBatch,
   PointerTrackingConfig,
-} from './types';
+} from './pointer-tracking';
