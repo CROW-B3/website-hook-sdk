@@ -6,9 +6,21 @@
 // Export constants
 export * from './utils/constants';
 
-// Unified interaction tracking
-import { initAutoCapture } from './visual-telemetry';
-import { initPointerTracking } from './pointer-tracking';
+// Import and re-export namespaces
+import { PointerTracking } from './pointer-tracking';
+import { VisualTelemetry } from './visual-telemetry';
+
+export { PointerTracking, VisualTelemetry };
+
+// Export backward compatibility types and functions
+export type {
+  PointerCoordinate,
+  PointerCoordinateBatch,
+  PointerTrackingConfig,
+} from './pointer-tracking';
+export type { AutoCaptureConfig } from './visual-telemetry';
+export { initPointerTracking } from './pointer-tracking';
+export { initAutoCapture } from './visual-telemetry';
 
 /**
  * Configuration for unified interaction tracking
@@ -17,13 +29,16 @@ export interface InteractionTrackingConfig {
   logging?: boolean;
 }
 
+/**
+ * Initialize both visual telemetry and pointer tracking with unified configuration
+ */
 export function initInteractionTracking(
   config: InteractionTrackingConfig = {}
 ): void {
   const logging = config.logging ?? false;
 
   // Initialize screenshot capture with hardcoded configuration
-  initAutoCapture({
+  VisualTelemetry.init({
     interval: 300, // Fixed 300ms interval
     viewportOnly: true, // Always capture viewport only
     quality: 0.92, // Fixed quality
@@ -33,7 +48,7 @@ export function initInteractionTracking(
   });
 
   // Initialize pointer tracking with hardcoded configuration
-  initPointerTracking({
+  PointerTracking.init({
     logging,
   });
 }
