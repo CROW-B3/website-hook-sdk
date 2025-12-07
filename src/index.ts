@@ -27,16 +27,7 @@ import { initPointerTracking } from './pointer-tracking';
 export interface InteractionTrackingConfig {
   logging?: boolean;
 }
-/**
- * Initialize all interaction tracking with hardcoded optimal configurations.
- * This function sets up:
- * - Screenshot capture (visual telemetry) with fixed 300ms interval
- * - Mouse/pointer movement tracking with batching
- *
- * All configurations are hardcoded for optimal performance and cannot be customized.
- *
- * @param config - Optional configuration (only logging can be toggled)
- */
+
 export function initInteractionTracking(
   config: InteractionTrackingConfig = {}
 ): void {
