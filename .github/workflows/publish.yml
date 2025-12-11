@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   update-version:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ github.actor != 'github-actions[bot]' }}
     outputs:
       version: ${{ steps.read_version.outputs.new_version }}
@@ -52,7 +52,7 @@ jobs:
           git push origin HEAD
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: update-version
     permissions:
       contents: read
