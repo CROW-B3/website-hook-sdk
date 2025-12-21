@@ -375,7 +375,3 @@ export namespace VisualTelemetry {
     }
   }
 }
-
-// Backward compatibility exports
-export type AutoCaptureConfig = VisualTelemetry.Config;
-export const initAutoCapture = VisualTelemetry.init;

@@ -12,16 +12,6 @@ import { VisualTelemetry } from './visual-telemetry';
 
 export { PointerTracking, VisualTelemetry };
 
-// Export backward compatibility types and functions
-export type {
-  PointerCoordinate,
-  PointerCoordinateBatch,
-  PointerTrackingConfig,
-} from './pointer-tracking';
-export type { AutoCaptureConfig } from './visual-telemetry';
-export { initPointerTracking } from './pointer-tracking';
-export { initAutoCapture } from './visual-telemetry';
-
 /**
  * Configuration for unified interaction tracking
  */

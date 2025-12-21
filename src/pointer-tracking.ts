@@ -262,9 +262,3 @@ export namespace PointerTracking {
     }
   }
 }
-
-// Backward compatibility exports
-export type PointerCoordinate = PointerTracking.Coordinate;
-export type PointerCoordinateBatch = PointerTracking.CoordinateBatch;
-export type PointerTrackingConfig = PointerTracking.Config;
-export const initPointerTracking = PointerTracking.init;
