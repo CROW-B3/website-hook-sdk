@@ -3,11 +3,14 @@
  * These point to the web-ingest-worker service
  */
 
+import { getEnvVar } from './utils/environment';
+
 /**
  * Base URL for the backend (web-ingest-worker)
- * Can be overridden via NEXT_PUBLIC_BE_BASE_URL environment variable
+ * Automatically overridden by NEXT_PUBLIC_BE_BASE_URL environment variable if set
  */
-export const NEXT_BASE_URL = 'http://localhost:3001';
+export const NEXT_BASE_URL =
+  getEnvVar('NEXT_PUBLIC_BE_BASE_URL') || 'http://localhost:3001';
 
 /** Endpoint path segments - centralized for easy refactoring */
 export const ENDPOINT_PATHS = {

@@ -2,7 +2,6 @@ import ky from 'ky';
 import {
   isBrowserEnvironment,
   getSiteInfo,
-  getEnvVar,
   getEnvironment,
 } from './utils/environment';
 import { NEXT_BASE_URL, ENDPOINT_PATHS } from './constants';
@@ -170,9 +169,7 @@ export namespace PointerTracking {
    * Build upload URL from environment configuration
    */
   function buildUploadUrl(): string {
-    const envBaseUrl = getEnvVar('NEXT_PUBLIC_BE_BASE_URL');
-    const baseUrl = envBaseUrl || NEXT_BASE_URL;
-    return `${baseUrl}${ENDPOINT_PATHS.POINTER_DATA}`;
+    return `${NEXT_BASE_URL}${ENDPOINT_PATHS.POINTER_DATA}`;
   }
 
   /**
