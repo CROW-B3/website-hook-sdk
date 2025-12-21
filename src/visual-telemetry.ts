@@ -6,7 +6,7 @@ import {
   getEnvVar,
   getEnvironment,
 } from './utils/environment';
-import { NEXT_BASE_URL, ENDPOINT_PATHS } from './utils/constants';
+import { NEXT_BASE_URL, ENDPOINT_PATHS } from './constants';
 
 export namespace VisualTelemetry {
   /**
