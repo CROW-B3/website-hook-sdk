@@ -3,9 +3,6 @@
  * A lightweight SDK for capturing user interactions and screenshots on web pages
  */
 
-// Export constants
-export * from './utils/constants';
-
 // Import and re-export namespaces
 import { PointerTracking } from './pointer-tracking';
 import { VisualTelemetry } from './visual-telemetry';
