@@ -1,11 +1,11 @@
 import html2canvas from 'html2canvas-pro';
-import ky from 'ky';
 import {
   isBrowserEnvironment,
   getSiteInfo,
   getEnvironment,
 } from './utils/environment';
 import { NEXT_BASE_URL, ENDPOINT_PATHS } from './constants';
+import { BaseTracking } from './base-tracking';
 
 export namespace VisualTelemetry {
   /**
@@ -115,17 +115,6 @@ export namespace VisualTelemetry {
     }
 
     /**
-     * Log upload attempt
-     */
-    export function logUploadAttempt(
-      uploadUrl: string,
-      logging: boolean
-    ): void {
-      if (!logging) return;
-      console.log(`${LOG_PREFIX} Uploading screenshot to:`, uploadUrl);
-    }
-
-    /**
      * Upload screenshot to server (fire-and-forget)
      */
     export function upload(
@@ -135,8 +124,6 @@ export namespace VisualTelemetry {
       metadata: Metadata.Data,
       logging: boolean
     ): void {
-      logUploadAttempt(uploadUrl, logging);
-
       const formData = new FormData();
       formData.append('screenshot', blob, filename);
       formData.append('filename', filename);
@@ -154,11 +141,9 @@ export namespace VisualTelemetry {
         );
       });
 
-      // Fire and forget - send data without waiting for response
-      ky.post(uploadUrl, {
-        body: formData,
-      }).catch(error => {
-        console.error(`${LOG_PREFIX} Failed to upload screenshot:`, error);
+      BaseTracking.uploadFormData(formData, uploadUrl, {
+        prefix: LOG_PREFIX,
+        logging,
       });
     }
 

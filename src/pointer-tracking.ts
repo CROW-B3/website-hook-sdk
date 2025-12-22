@@ -1,10 +1,10 @@
-import ky from 'ky';
 import {
   isBrowserEnvironment,
   getSiteInfo,
   getEnvironment,
 } from './utils/environment';
 import { NEXT_BASE_URL, ENDPOINT_PATHS } from './constants';
+import { BaseTracking } from './base-tracking';
 
 export namespace PointerTracking {
   /**
@@ -24,15 +24,8 @@ export namespace PointerTracking {
   /**
    * Batch of pointer coordinates
    */
-  export interface BatchData {
-    sessionId: string;
+  export interface BatchData extends BaseTracking.BaseBatchData {
     coordinates: CoordinateData[];
-    batchStartTime: number;
-    batchEndTime: number;
-    url: string;
-    site?: string;
-    hostname?: string;
-    environment?: string;
   }
 
   /**
@@ -85,42 +78,14 @@ export namespace PointerTracking {
    * Log batch information for debugging
    */
   export function logBatchInfo(batch: BatchData, logging: boolean): void {
-    if (!logging) return;
-
-    const duration = batch.batchEndTime - batch.batchStartTime;
-    console.log(
-      `${LOG_PREFIX} Batch ready - ${batch.coordinates.length} coordinates over ${duration}ms`
-    );
-    console.log(`${LOG_PREFIX} Batch data:`, {
-      sessionId: batch.sessionId,
-      coordinateCount: batch.coordinates.length,
-      firstCoordinate: batch.coordinates[0],
-      lastCoordinate: batch.coordinates[batch.coordinates.length - 1],
-      url: batch.url,
-      site: batch.site,
-    });
-  }
-
-  /**
-   * Log upload details for debugging
-   */
-  export function logBatchUpload(batch: BatchData, logging: boolean): void {
-    if (!logging) return;
-
-    const duration = batch.batchEndTime - batch.batchStartTime;
-    console.log(`${LOG_PREFIX} Uploading batch:`, {
-      sessionId: batch.sessionId,
-      coordinates: batch.coordinates.length,
-      timeRange: `${batch.batchStartTime} - ${batch.batchEndTime}`,
-      duration: `${duration}ms`,
-    });
-    console.log(
-      `${LOG_PREFIX} First 5 coordinates:`,
-      batch.coordinates.slice(0, 5)
-    );
-    console.log(
-      `${LOG_PREFIX} Last 5 coordinates:`,
-      batch.coordinates.slice(-5)
+    BaseTracking.logBatchInfo(
+      batch,
+      { prefix: LOG_PREFIX, logging },
+      {
+        coordinateCount: batch.coordinates.length,
+        firstCoordinate: batch.coordinates[0],
+        lastCoordinate: batch.coordinates[batch.coordinates.length - 1],
+      }
     );
   }
 
@@ -132,14 +97,16 @@ export namespace PointerTracking {
     uploadUrl: string,
     logging: boolean
   ): void {
-    logBatchUpload(batch, logging);
-
-    // Fire and forget - send data without waiting for response
-    ky.post(uploadUrl, {
-      json: batch,
-    }).catch(error => {
-      console.error(`${LOG_PREFIX} Upload error:`, error);
-    });
+    BaseTracking.uploadBatchJSON(
+      batch,
+      uploadUrl,
+      { prefix: LOG_PREFIX, logging },
+      {
+        coordinates: batch.coordinates.length,
+        firstCoordinates: batch.coordinates.slice(0, 5),
+        lastCoordinates: batch.coordinates.slice(-5),
+      }
+    );
   }
 
   const BATCH_INTERVAL_MS = 1000;
@@ -147,13 +114,7 @@ export namespace PointerTracking {
   const LOG_PREFIX = '[PointerTracking]';
 
   let isInitialized = false;
-  const sessionId = generateSessionId();
-
-  function generateSessionId(): string {
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 11);
-    return `session-${timestamp}-${random}`;
-  }
+  const sessionId = BaseTracking.generateSessionId();
 
   /**
    * Build upload URL from environment configuration
