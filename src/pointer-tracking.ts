@@ -8,141 +8,31 @@ import { NEXT_BASE_URL, ENDPOINT_PATHS } from './constants';
 
 export namespace PointerTracking {
   /**
-   * Coordinate namespace - groups coordinate interface and related utilities
+   * Pointer coordinate data point
    */
-  export namespace Coordinate {
-    /**
-     * Pointer coordinate data point
-     */
-    export interface Data {
-      timestamp: number;
-      clientX: number;
-      clientY: number;
-      pageX: number;
-      pageY: number;
-      pointerType: string;
-      pressure: number;
-      pointerId: number;
-    }
-
-    /**
-     * Create coordinate from pointer event
-     */
-    export function createFromPointerEvent(event: PointerEvent): Data {
-      return {
-        timestamp: Date.now(),
-        clientX: event.clientX,
-        clientY: event.clientY,
-        pageX: event.pageX,
-        pageY: event.pageY,
-        pointerType: event.pointerType,
-        pressure: event.pressure,
-        pointerId: event.pointerId,
-      };
-    }
+  export interface CoordinateData {
+    timestamp: number;
+    clientX: number;
+    clientY: number;
+    pageX: number;
+    pageY: number;
+    pointerType: string;
+    pressure: number;
+    pointerId: number;
   }
 
   /**
-   * Batch namespace - groups batch interface and related utilities
+   * Batch of pointer coordinates
    */
-  export namespace Batch {
-    /**
-     * Batch of pointer coordinates
-     */
-    export interface Data {
-      sessionId: string;
-      coordinates: Coordinate.Data[];
-      batchStartTime: number;
-      batchEndTime: number;
-      url: string;
-      site?: string;
-      hostname?: string;
-      environment?: string;
-    }
-
-    /**
-     * Create batch from buffer
-     */
-    export function create(
-      coordinates: Coordinate.Data[],
-      sessionId: string,
-      startTime: number,
-      siteName: string,
-      hostname: string,
-      environment: string
-    ): Data {
-      return {
-        sessionId,
-        coordinates: [...coordinates],
-        batchStartTime: startTime,
-        batchEndTime: Date.now(),
-        url: window.location.href,
-        site: siteName,
-        hostname,
-        environment,
-      };
-    }
-
-    /**
-     * Log batch information for debugging
-     */
-    export function logInfo(batch: Data, logging: boolean): void {
-      if (!logging) return;
-
-      const duration = batch.batchEndTime - batch.batchStartTime;
-      console.log(
-        `${LOG_PREFIX} Batch ready - ${batch.coordinates.length} coordinates over ${duration}ms`
-      );
-      console.log(`${LOG_PREFIX} Batch data:`, {
-        sessionId: batch.sessionId,
-        coordinateCount: batch.coordinates.length,
-        firstCoordinate: batch.coordinates[0],
-        lastCoordinate: batch.coordinates[batch.coordinates.length - 1],
-        url: batch.url,
-        site: batch.site,
-      });
-    }
-
-    /**
-     * Log upload details for debugging
-     */
-    export function logUploadAttempt(batch: Data, logging: boolean): void {
-      if (!logging) return;
-
-      const duration = batch.batchEndTime - batch.batchStartTime;
-      console.log(`${LOG_PREFIX} Uploading batch:`, {
-        sessionId: batch.sessionId,
-        coordinates: batch.coordinates.length,
-        timeRange: `${batch.batchStartTime} - ${batch.batchEndTime}`,
-        duration: `${duration}ms`,
-      });
-      console.log(
-        `${LOG_PREFIX} First 5 coordinates:`,
-        batch.coordinates.slice(0, 5)
-      );
-      console.log(
-        `${LOG_PREFIX} Last 5 coordinates:`,
-        batch.coordinates.slice(-5)
-      );
-    }
-
-    /**
-     * Upload batch to server (fire-and-forget)
-     */
-    export function upload(
-      batch: Data,
-      uploadUrl: string,
-      logging: boolean
-    ): void {
-      logUploadAttempt(batch, logging);
-
-      // Fire and forget - send data without waiting for response
-      ky.post(uploadUrl, {
-        json: batch,
-      }).catch(error => {
-        console.error(`${LOG_PREFIX} Upload error:`, error);
-      });
-    }
+  export interface BatchData {
+    sessionId: string;
+    coordinates: CoordinateData[];
+    batchStartTime: number;
+    batchEndTime: number;
+    url: string;
+    site?: string;
+    hostname?: string;
+    environment?: string;
   }
 
   /**
@@ -150,6 +40,106 @@ export namespace PointerTracking {
    */
   export interface Config {
     logging?: boolean;
+  }
+
+  /**
+   * Create coordinate from pointer event
+   */
+  export function createCoordinate(event: PointerEvent): CoordinateData {
+    return {
+      timestamp: Date.now(),
+      clientX: event.clientX,
+      clientY: event.clientY,
+      pageX: event.pageX,
+      pageY: event.pageY,
+      pointerType: event.pointerType,
+      pressure: event.pressure,
+      pointerId: event.pointerId,
+    };
+  }
+
+  /**
+   * Create batch from buffer
+   */
+  export function createBatch(
+    coordinates: CoordinateData[],
+    sessionId: string,
+    startTime: number,
+    siteName: string,
+    hostname: string,
+    environment: string
+  ): BatchData {
+    return {
+      sessionId,
+      coordinates: [...coordinates],
+      batchStartTime: startTime,
+      batchEndTime: Date.now(),
+      url: window.location.href,
+      site: siteName,
+      hostname,
+      environment,
+    };
+  }
+
+  /**
+   * Log batch information for debugging
+   */
+  export function logBatchInfo(batch: BatchData, logging: boolean): void {
+    if (!logging) return;
+
+    const duration = batch.batchEndTime - batch.batchStartTime;
+    console.log(
+      `${LOG_PREFIX} Batch ready - ${batch.coordinates.length} coordinates over ${duration}ms`
+    );
+    console.log(`${LOG_PREFIX} Batch data:`, {
+      sessionId: batch.sessionId,
+      coordinateCount: batch.coordinates.length,
+      firstCoordinate: batch.coordinates[0],
+      lastCoordinate: batch.coordinates[batch.coordinates.length - 1],
+      url: batch.url,
+      site: batch.site,
+    });
+  }
+
+  /**
+   * Log upload details for debugging
+   */
+  export function logBatchUpload(batch: BatchData, logging: boolean): void {
+    if (!logging) return;
+
+    const duration = batch.batchEndTime - batch.batchStartTime;
+    console.log(`${LOG_PREFIX} Uploading batch:`, {
+      sessionId: batch.sessionId,
+      coordinates: batch.coordinates.length,
+      timeRange: `${batch.batchStartTime} - ${batch.batchEndTime}`,
+      duration: `${duration}ms`,
+    });
+    console.log(
+      `${LOG_PREFIX} First 5 coordinates:`,
+      batch.coordinates.slice(0, 5)
+    );
+    console.log(
+      `${LOG_PREFIX} Last 5 coordinates:`,
+      batch.coordinates.slice(-5)
+    );
+  }
+
+  /**
+   * Upload batch to server (fire-and-forget)
+   */
+  export function uploadBatch(
+    batch: BatchData,
+    uploadUrl: string,
+    logging: boolean
+  ): void {
+    logBatchUpload(batch, logging);
+
+    // Fire and forget - send data without waiting for response
+    ky.post(uploadUrl, {
+      json: batch,
+    }).catch(error => {
+      console.error(`${LOG_PREFIX} Upload error:`, error);
+    });
   }
 
   const BATCH_INTERVAL_MS = 1000;
@@ -209,14 +199,14 @@ export namespace PointerTracking {
     }
 
     // Initialize tracking state
-    let coordinateBuffer: Coordinate.Data[] = [];
+    let coordinateBuffer: CoordinateData[] = [];
     let batchStartTime = Date.now();
 
     // Create batch sender
     const sendBatch = (): void => {
       if (coordinateBuffer.length === 0) return;
 
-      const batch = Batch.create(
+      const batch = createBatch(
         coordinateBuffer,
         sessionId,
         batchStartTime,
@@ -228,13 +218,13 @@ export namespace PointerTracking {
       coordinateBuffer = [];
       batchStartTime = Date.now();
 
-      Batch.logInfo(batch, logging);
-      Batch.upload(batch, uploadUrl, logging);
+      logBatchInfo(batch, logging);
+      uploadBatch(batch, uploadUrl, logging);
     };
 
     // Create pointer event handler
     const handlePointerMove = (event: PointerEvent): void => {
-      const coordinate = Coordinate.createFromPointerEvent(event);
+      const coordinate = createCoordinate(event);
       coordinateBuffer.push(coordinate);
 
       if (coordinateBuffer.length >= MAX_BATCH_SIZE) {
