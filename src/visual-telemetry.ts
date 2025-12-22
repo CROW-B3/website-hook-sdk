@@ -9,253 +9,25 @@ import { BaseTracking } from './base-tracking';
 
 export namespace VisualTelemetry {
   /**
-   * Viewport namespace - groups viewport interface and related utilities
+   * Viewport information
    */
-  export namespace Viewport {
-    /**
-     * Viewport information
-     */
-    export interface Info {
-      scrollX: number;
-      scrollY: number;
-      width: number;
-      height: number;
-    }
-
-    /**
-     * Get current viewport information
-     */
-    export function getInfo(): Info {
-      return {
-        scrollX: window.scrollX || window.pageXOffset || 0,
-        scrollY: window.scrollY || window.pageYOffset || 0,
-        width: window.innerWidth,
-        height: window.innerHeight,
-      };
-    }
-
-    /**
-     * Log viewport capture details
-     */
-    export function logCapture(viewport: Info, logging: boolean): void {
-      if (!logging) return;
-
-      console.log(
-        `${LOG_PREFIX} Capturing viewport at current scroll position:`,
-        {
-          scrollX: viewport.scrollX,
-          scrollY: viewport.scrollY,
-          viewportWidth: viewport.width,
-          viewportHeight: viewport.height,
-        }
-      );
-    }
+  export interface ViewportInfo {
+    scrollX: number;
+    scrollY: number;
+    width: number;
+    height: number;
   }
 
   /**
-   * Metadata namespace - groups metadata interface and related utilities
+   * Capture metadata
    */
-  export namespace Metadata {
-    /**
-     * Capture metadata
-     */
-    export interface Data {
-      site: string;
-      hostname: string;
-      environment: string;
-      timestamp: number;
-      userAgent: string;
-      [key: string]: any;
-    }
-
-    /**
-     * Build capture metadata with site and environment info
-     */
-    export function build(
-      siteName: string,
-      hostname: string,
-      environment: string,
-      customMetadata?: Record<string, any>
-    ): Data {
-      return {
-        site: siteName,
-        hostname: hostname,
-        environment: environment,
-        timestamp: Date.now(),
-        userAgent: navigator.userAgent,
-        ...customMetadata,
-      };
-    }
-  }
-
-  /**
-   * Screenshot namespace - groups screenshot capture and upload utilities
-   */
-  export namespace Screenshot {
-    /**
-     * Convert canvas to blob
-     */
-    async function canvasToBlob(
-      canvas: HTMLCanvasElement,
-      quality: number
-    ): Promise<Blob> {
-      return new Promise((resolve, reject) => {
-        canvas.toBlob(
-          blob => {
-            if (blob) {
-              resolve(blob);
-            } else {
-              reject(new Error('Failed to convert canvas to blob'));
-            }
-          },
-          'image/png',
-          quality
-        );
-      });
-    }
-
-    /**
-     * Upload screenshot to server (fire-and-forget)
-     */
-    export function upload(
-      blob: Blob,
-      filename: string,
-      uploadUrl: string,
-      metadata: Metadata.Data,
-      logging: boolean
-    ): void {
-      const formData = new FormData();
-      formData.append('screenshot', blob, filename);
-      formData.append('filename', filename);
-      formData.append('timestamp', Date.now().toString());
-      formData.append('url', window.location.href);
-      formData.append('userAgent', navigator.userAgent);
-
-      const viewport = Viewport.getInfo();
-      formData.append('viewport', JSON.stringify(viewport));
-
-      Object.entries(metadata).forEach(([key, value]) => {
-        formData.append(
-          key,
-          typeof value === 'string' ? value : JSON.stringify(value)
-        );
-      });
-
-      BaseTracking.uploadFormData(formData, uploadUrl, {
-        prefix: LOG_PREFIX,
-        logging,
-      });
-    }
-
-    /**
-     * Capture viewport screenshot
-     */
-    export async function captureViewport(
-      config: ReturnType<typeof buildFinalConfig>,
-      siteName: string,
-      metadata: Metadata.Data
-    ): Promise<void> {
-      const timestamp = Date.now();
-      const filenameBase = `${siteName}-screenshot-${timestamp}`;
-
-      const captureMetadata = {
-        ...metadata,
-        timestamp,
-      };
-
-      const viewport = Viewport.getInfo();
-      Viewport.logCapture(viewport, config.logging);
-
-      const canvas = await html2canvas(document.documentElement, {
-        useCORS: config.useCORS,
-        allowTaint: false,
-        backgroundColor: config.backgroundColor,
-        scale: config.scale,
-        logging: config.logging,
-        x: viewport.scrollX,
-        y: viewport.scrollY,
-        width: viewport.width,
-        height: viewport.height,
-        windowWidth: viewport.width,
-        windowHeight: viewport.height,
-        scrollX: 0,
-        scrollY: 0,
-        ignoreElements: (element: Element) => {
-          return element.tagName === 'SCRIPT';
-        },
-      });
-
-      if (config.logging) {
-        console.log(`${LOG_PREFIX} Screenshot captured, converting to blob...`);
-      }
-
-      const blob = await canvasToBlob(canvas, config.quality);
-      const filename = `${filenameBase}.png`;
-
-      // Fire and forget upload
-      upload(blob, filename, config.uploadUrl, captureMetadata, config.logging);
-    }
-
-    /**
-     * Capture full page screenshot
-     */
-    export async function captureFullPage(
-      config: ReturnType<typeof buildFinalConfig>,
-      siteName: string,
-      metadata: Metadata.Data
-    ): Promise<void> {
-      const timestamp = Date.now();
-      const filenameBase = `${siteName}-screenshot-${timestamp}`;
-
-      const captureMetadata = {
-        ...metadata,
-        timestamp,
-      };
-
-      if (config.logging) {
-        console.log(`${LOG_PREFIX} Capturing full page`);
-      }
-
-      const canvas = await html2canvas(document.body, {
-        useCORS: config.useCORS,
-        allowTaint: false,
-        backgroundColor: config.backgroundColor,
-        scale: config.scale,
-        logging: config.logging,
-        ignoreElements: (element: Element) => {
-          return element.tagName === 'SCRIPT';
-        },
-      });
-
-      if (config.logging) {
-        console.log(`${LOG_PREFIX} Screenshot captured, converting to blob...`);
-      }
-
-      const blob = await canvasToBlob(canvas, config.quality);
-      const filename = `${filenameBase}.png`;
-
-      // Fire and forget upload
-      upload(blob, filename, config.uploadUrl, captureMetadata, config.logging);
-    }
-
-    /**
-     * Main screenshot capture handler
-     */
-    export async function capture(
-      config: ReturnType<typeof buildFinalConfig>,
-      siteName: string,
-      defaultMetadata: Metadata.Data
-    ): Promise<void> {
-      try {
-        if (config.viewportOnly) {
-          await captureViewport(config, siteName, defaultMetadata);
-        } else {
-          await captureFullPage(config, siteName, defaultMetadata);
-        }
-      } catch (error) {
-        console.error(`${LOG_PREFIX} Failed to capture screenshot:`, error);
-      }
-    }
+  export interface CaptureMetadata {
+    site: string;
+    hostname: string;
+    environment: string;
+    timestamp: number;
+    userAgent: string;
+    [key: string]: any;
   }
 
   /**
@@ -272,6 +44,234 @@ export namespace VisualTelemetry {
     scale?: number;
     quality?: number;
     logging?: boolean;
+  }
+
+  /**
+   * Get current viewport information
+   */
+  export function getViewportInfo(): ViewportInfo {
+    return {
+      scrollX: window.scrollX || window.pageXOffset || 0,
+      scrollY: window.scrollY || window.pageYOffset || 0,
+      width: window.innerWidth,
+      height: window.innerHeight,
+    };
+  }
+
+  /**
+   * Log viewport capture details
+   */
+  export function logViewportCapture(
+    viewport: ViewportInfo,
+    logging: boolean
+  ): void {
+    if (!logging) return;
+
+    console.log(
+      `${LOG_PREFIX} Capturing viewport at current scroll position:`,
+      {
+        scrollX: viewport.scrollX,
+        scrollY: viewport.scrollY,
+        viewportWidth: viewport.width,
+        viewportHeight: viewport.height,
+      }
+    );
+  }
+
+  /**
+   * Build capture metadata with site and environment info
+   */
+  export function buildMetadata(
+    siteName: string,
+    hostname: string,
+    environment: string,
+    customMetadata?: Record<string, any>
+  ): CaptureMetadata {
+    return {
+      site: siteName,
+      hostname: hostname,
+      environment: environment,
+      timestamp: Date.now(),
+      userAgent: navigator.userAgent,
+      ...customMetadata,
+    };
+  }
+
+  /**
+   * Convert canvas to blob
+   */
+  async function canvasToBlob(
+    canvas: HTMLCanvasElement,
+    quality: number
+  ): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(
+        blob => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('Failed to convert canvas to blob'));
+          }
+        },
+        'image/png',
+        quality
+      );
+    });
+  }
+
+  /**
+   * Upload screenshot to server (fire-and-forget)
+   */
+  export function uploadScreenshot(
+    blob: Blob,
+    filename: string,
+    uploadUrl: string,
+    metadata: CaptureMetadata,
+    logging: boolean
+  ): void {
+    const formData = new FormData();
+    formData.append('screenshot', blob, filename);
+    formData.append('filename', filename);
+    formData.append('timestamp', Date.now().toString());
+    formData.append('url', window.location.href);
+    formData.append('userAgent', navigator.userAgent);
+
+    const viewport = getViewportInfo();
+    formData.append('viewport', JSON.stringify(viewport));
+
+    Object.entries(metadata).forEach(([key, value]) => {
+      formData.append(
+        key,
+        typeof value === 'string' ? value : JSON.stringify(value)
+      );
+    });
+
+    BaseTracking.uploadFormData(formData, uploadUrl, {
+      prefix: LOG_PREFIX,
+      logging,
+    });
+  }
+
+  /**
+   * Capture viewport screenshot
+   */
+  export async function captureViewport(
+    config: ReturnType<typeof buildFinalConfig>,
+    siteName: string,
+    metadata: CaptureMetadata
+  ): Promise<void> {
+    const timestamp = Date.now();
+    const filenameBase = `${siteName}-screenshot-${timestamp}`;
+
+    const captureMetadata = {
+      ...metadata,
+      timestamp,
+    };
+
+    const viewport = getViewportInfo();
+    logViewportCapture(viewport, config.logging);
+
+    const canvas = await html2canvas(document.documentElement, {
+      useCORS: config.useCORS,
+      allowTaint: false,
+      backgroundColor: config.backgroundColor,
+      scale: config.scale,
+      logging: config.logging,
+      x: viewport.scrollX,
+      y: viewport.scrollY,
+      width: viewport.width,
+      height: viewport.height,
+      windowWidth: viewport.width,
+      windowHeight: viewport.height,
+      scrollX: 0,
+      scrollY: 0,
+      ignoreElements: (element: Element) => {
+        return element.tagName === 'SCRIPT';
+      },
+    });
+
+    if (config.logging) {
+      console.log(`${LOG_PREFIX} Screenshot captured, converting to blob...`);
+    }
+
+    const blob = await canvasToBlob(canvas, config.quality);
+    const filename = `${filenameBase}.png`;
+
+    // Fire and forget upload
+    uploadScreenshot(
+      blob,
+      filename,
+      config.uploadUrl,
+      captureMetadata,
+      config.logging
+    );
+  }
+
+  /**
+   * Capture full page screenshot
+   */
+  export async function captureFullPage(
+    config: ReturnType<typeof buildFinalConfig>,
+    siteName: string,
+    metadata: CaptureMetadata
+  ): Promise<void> {
+    const timestamp = Date.now();
+    const filenameBase = `${siteName}-screenshot-${timestamp}`;
+
+    const captureMetadata = {
+      ...metadata,
+      timestamp,
+    };
+
+    if (config.logging) {
+      console.log(`${LOG_PREFIX} Capturing full page`);
+    }
+
+    const canvas = await html2canvas(document.body, {
+      useCORS: config.useCORS,
+      allowTaint: false,
+      backgroundColor: config.backgroundColor,
+      scale: config.scale,
+      logging: config.logging,
+      ignoreElements: (element: Element) => {
+        return element.tagName === 'SCRIPT';
+      },
+    });
+
+    if (config.logging) {
+      console.log(`${LOG_PREFIX} Screenshot captured, converting to blob...`);
+    }
+
+    const blob = await canvasToBlob(canvas, config.quality);
+    const filename = `${filenameBase}.png`;
+
+    // Fire and forget upload
+    uploadScreenshot(
+      blob,
+      filename,
+      config.uploadUrl,
+      captureMetadata,
+      config.logging
+    );
+  }
+
+  /**
+   * Main screenshot capture handler
+   */
+  export async function captureScreenshot(
+    config: ReturnType<typeof buildFinalConfig>,
+    siteName: string,
+    defaultMetadata: CaptureMetadata
+  ): Promise<void> {
+    try {
+      if (config.viewportOnly) {
+        await captureViewport(config, siteName, defaultMetadata);
+      } else {
+        await captureFullPage(config, siteName, defaultMetadata);
+      }
+    } catch (error) {
+      console.error(`${LOG_PREFIX} Failed to capture screenshot:`, error);
+    }
   }
 
   const DEFAULT_INTERVAL_MS = 300;
@@ -296,7 +296,7 @@ export namespace VisualTelemetry {
   function buildFinalConfig(
     config: Config,
     siteName: string,
-    defaultMetadata: Metadata.Data
+    defaultMetadata: CaptureMetadata
   ) {
     return {
       interval: config.interval ?? DEFAULT_INTERVAL_MS,
@@ -335,7 +335,7 @@ export namespace VisualTelemetry {
     const environment = getEnvironment();
 
     // Build metadata
-    const defaultMetadata = Metadata.build(
+    const defaultMetadata = buildMetadata(
       siteName,
       hostname,
       environment,
@@ -362,7 +362,7 @@ export namespace VisualTelemetry {
       if (finalConfig.logging) {
         console.log(`${LOG_PREFIX} Capturing first screenshot immediately...`);
       }
-      Screenshot.capture(finalConfig, siteName, defaultMetadata);
+      captureScreenshot(finalConfig, siteName, defaultMetadata);
 
       if (finalConfig.logging) {
         console.log(
@@ -371,7 +371,7 @@ export namespace VisualTelemetry {
       }
 
       setInterval(() => {
-        Screenshot.capture(finalConfig, siteName, defaultMetadata);
+        captureScreenshot(finalConfig, siteName, defaultMetadata);
       }, finalConfig.interval);
     } else {
       if (finalConfig.logging) {
