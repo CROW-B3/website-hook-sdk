@@ -1,6 +1,6 @@
 {
   "name": "@b3-crow/website-hook-sdk",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "description": "A lightweight JavaScript/TypeScript SDK for capturing user interactions on web pages and sending them into the Crow-B3 analytics/data pipeline.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
