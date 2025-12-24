@@ -200,9 +200,8 @@ export namespace UnifiedTracking {
     // Tracking state
     let coordinateBuffer: PointerTracking.CoordinateData[] = [];
     let batchStartTime = Date.now();
-    let shouldCaptureScreenshot = false;
-    let lastScreenshotTime = 0;
-    const SCREENSHOT_COOLDOWN_MS = 100; // Prevent too frequent screenshots
+    let hasStartedTracking = false; // Track if we've started sending batches
+    let intervalId: number | null = null;
 
     /**
      * Send unified batch
@@ -210,29 +209,23 @@ export namespace UnifiedTracking {
     const sendBatch = async (): Promise<void> => {
       const batchEndTime = Date.now();
 
-      // Only send if we have data
-      if (!shouldCaptureScreenshot && coordinateBuffer.length === 0) {
+      // After first mouse movement, always send batches (even if no data)
+      // This ensures continuous 500ms updates
+      if (!hasStartedTracking) {
+        // Don't send if tracking hasn't started yet
         return;
       }
 
       let screenshot: UnifiedBatch['screenshot'] | null = null;
 
-      // Capture screenshot if triggered and cooldown passed
-      if (
-        shouldCaptureScreenshot &&
-        batchEndTime - lastScreenshotTime >= SCREENSHOT_COOLDOWN_MS
-      ) {
-        screenshot = await captureViewportScreenshot(
-          siteName,
-          quality,
-          useCORS,
-          backgroundColor,
-          logging
-        );
-        if (screenshot) {
-          lastScreenshotTime = batchEndTime;
-        }
-      }
+      // Capture screenshot in every batch after tracking starts
+      screenshot = await captureViewportScreenshot(
+        siteName,
+        quality,
+        useCORS,
+        backgroundColor,
+        logging
+      );
 
       // Create unified batch
       const batch: UnifiedBatch = {
@@ -258,15 +251,13 @@ export namespace UnifiedTracking {
         };
       }
 
-      // Reset state
+      // Reset state for next batch
       coordinateBuffer = [];
       batchStartTime = Date.now();
-      shouldCaptureScreenshot = false;
 
-      // Upload batch
-      if (batch.screenshot || batch.pointerData) {
-        uploadUnifiedBatch(batch, uploadUrl, logging);
-      }
+      // Always upload batch after tracking has started
+      // This ensures continuous 500ms updates even if no mouse movement
+      uploadUnifiedBatch(batch, uploadUrl, logging);
     };
 
     /**
@@ -277,21 +268,32 @@ export namespace UnifiedTracking {
       const coordinate = PointerTracking.createCoordinate(event);
       coordinateBuffer.push(coordinate);
 
-      // Trigger screenshot capture on movement
-      shouldCaptureScreenshot = true;
+      // On first mouse movement, start continuous batching with screenshots
+      if (!hasStartedTracking) {
+        hasStartedTracking = true;
+
+        if (logging) {
+          console.log(
+            `${LOG_PREFIX} First mouse movement detected, starting continuous batching with screenshots every ${batchInterval}ms`
+          );
+        }
+      }
     };
 
     /**
      * Handle page unload - flush remaining data
      */
     const handleBeforeUnload = (): void => {
-      if (coordinateBuffer.length > 0 || shouldCaptureScreenshot) {
+      if (hasStartedTracking) {
         if (logging) {
           console.log(
-            `${LOG_PREFIX} Page unloading, flushing batch with ${coordinateBuffer.length} coordinates`
+            `${LOG_PREFIX} Page unloading, flushing final batch with ${coordinateBuffer.length} coordinates`
           );
         }
-        // Note: Screenshot capture on unload might not complete, but we try
+        // Clear interval to prevent duplicate sends
+        if (intervalId !== null) {
+          clearInterval(intervalId);
+        }
         sendBatch();
       }
     };
@@ -300,12 +302,12 @@ export namespace UnifiedTracking {
     document.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
-    // Setup batch interval
-    setInterval(sendBatch, batchInterval);
+    // Setup batch interval - runs every 500ms continuously
+    intervalId = setInterval(sendBatch, batchInterval) as unknown as number;
 
     if (logging) {
       console.log(
-        `${LOG_PREFIX} Started unified tracking. Batches sent every ${batchInterval}ms, screenshots captured on mouse movement`
+        `${LOG_PREFIX} Unified tracking initialized. Waiting for first mouse movement to start continuous ${batchInterval}ms batching (screenshots + mouse data)`
       );
     }
   }

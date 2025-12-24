@@ -11,9 +11,10 @@ export interface Config {
 
 /**
  * Initialize unified interaction tracking
- * - Captures screenshots on mouse movement (not on interval)
- * - Batches both screenshot and pointer data together
- * - Sends bundled data every 500ms (configurable)
+ * - Waits for first mouse movement to start tracking
+ * - After first movement, sends batches every 500ms continuously
+ * - Each batch includes: screenshot + mouse coordinates (if any)
+ * - Batches sent even if no mouse movement (to maintain continuous screenshots)
  */
 export function init(config: Config = {}): void {
   const logging = config.logging ?? false;
@@ -29,7 +30,7 @@ export function init(config: Config = {}): void {
 
   if (logging) {
     console.log(
-      '[InteractionTracking] Initialized with unified tracking (500ms batches, screenshot on mouse movement)'
+      '[InteractionTracking] Initialized with unified tracking (continuous 500ms batches with screenshots + mouse data after first movement)'
     );
   }
 }
