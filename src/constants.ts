@@ -11,7 +11,7 @@ import { getEnvVar } from './utils/environment';
  */
 export const NEXT_BASE_URL =
   getEnvVar('NEXT_PUBLIC_BE_BASE_URL') ||
-  'https://crow-web-ingest-worker-dev.bitbybit-b3.workers.dev/';
+  'https://crow-web-ingest-worker-dev.bitbybit-b3.workers.dev';
 
 /** Endpoint path segments - centralized for easy refactoring */
 export const ENDPOINT_PATHS = {
