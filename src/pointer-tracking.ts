@@ -6,6 +6,11 @@ import {
 import { NEXT_BASE_URL, ENDPOINT_PATHS } from './constants';
 import { BaseTracking } from './base-tracking';
 
+/**
+ * @deprecated This module is kept for backward compatibility.
+ * For new implementations, use UnifiedTracking instead which combines
+ * screenshot and pointer tracking in a more efficient way.
+ */
 export namespace PointerTracking {
   /**
    * Pointer coordinate data point

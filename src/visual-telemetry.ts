@@ -1,4 +1,3 @@
-import html2canvas from 'html2canvas-pro';
 import {
   isBrowserEnvironment,
   getSiteInfo,
@@ -6,17 +5,19 @@ import {
 } from './utils/environment';
 import { NEXT_BASE_URL, ENDPOINT_PATHS } from './constants';
 import { BaseTracking } from './base-tracking';
+import * as ScreenshotUtils from './utils/screenshot';
 
+/**
+ * @deprecated This module is kept for backward compatibility.
+ * For new implementations, use UnifiedTracking instead which combines
+ * screenshot and pointer tracking in a more efficient way.
+ */
 export namespace VisualTelemetry {
   /**
    * Viewport information
+   * Re-exported from shared utilities for backward compatibility
    */
-  export interface ViewportInfo {
-    scrollX: number;
-    scrollY: number;
-    width: number;
-    height: number;
-  }
+  export type ViewportInfo = ScreenshotUtils.ViewportInfo;
 
   /**
    * Capture metadata
@@ -48,15 +49,9 @@ export namespace VisualTelemetry {
 
   /**
    * Get current viewport information
+   * Re-exported from shared utilities for backward compatibility
    */
-  export function getViewportInfo(): ViewportInfo {
-    return {
-      scrollX: window.scrollX || window.pageXOffset || 0,
-      scrollY: window.scrollY || window.pageYOffset || 0,
-      width: window.innerWidth,
-      height: window.innerHeight,
-    };
-  }
+  export const getViewportInfo = ScreenshotUtils.getViewportInfo;
 
   /**
    * Log viewport capture details
@@ -99,25 +94,9 @@ export namespace VisualTelemetry {
 
   /**
    * Convert canvas to blob
+   * Re-exported from shared utilities for backward compatibility
    */
-  async function canvasToBlob(
-    canvas: HTMLCanvasElement,
-    quality: number
-  ): Promise<Blob> {
-    return new Promise((resolve, reject) => {
-      canvas.toBlob(
-        blob => {
-          if (blob) {
-            resolve(blob);
-          } else {
-            reject(new Error('Failed to convert canvas to blob'));
-          }
-        },
-        'image/png',
-        quality
-      );
-    });
-  }
+  export const canvasToBlob = ScreenshotUtils.canvasToBlob;
 
   /**
    * Upload screenshot to server (fire-and-forget)
@@ -160,46 +139,24 @@ export namespace VisualTelemetry {
     siteName: string,
     metadata: CaptureMetadata
   ): Promise<void> {
-    const timestamp = Date.now();
-    const filenameBase = `${siteName}-screenshot-${timestamp}`;
-
-    const captureMetadata = {
-      ...metadata,
-      timestamp,
-    };
-
-    const viewport = getViewportInfo();
-    logViewportCapture(viewport, config.logging);
-
-    const canvas = await html2canvas(document.documentElement, {
+    const result = await ScreenshotUtils.captureViewportScreenshot({
+      quality: config.quality,
       useCORS: config.useCORS,
-      allowTaint: false,
       backgroundColor: config.backgroundColor,
-      scale: config.scale,
       logging: config.logging,
-      x: viewport.scrollX,
-      y: viewport.scrollY,
-      width: viewport.width,
-      height: viewport.height,
-      windowWidth: viewport.width,
-      windowHeight: viewport.height,
-      scrollX: 0,
-      scrollY: 0,
-      ignoreElements: (element: Element) => {
-        return element.tagName === 'SCRIPT';
-      },
     });
 
-    if (config.logging) {
-      console.log(`${LOG_PREFIX} Screenshot captured, converting to blob...`);
-    }
+    logViewportCapture(result.viewport, config.logging);
 
-    const blob = await canvasToBlob(canvas, config.quality);
-    const filename = `${filenameBase}.png`;
+    const filename = `${siteName}-screenshot-${result.timestamp}.png`;
+    const captureMetadata = {
+      ...metadata,
+      timestamp: result.timestamp,
+    };
 
     // Fire and forget upload
     uploadScreenshot(
-      blob,
+      result.blob,
       filename,
       config.uploadUrl,
       captureMetadata,
@@ -215,39 +172,22 @@ export namespace VisualTelemetry {
     siteName: string,
     metadata: CaptureMetadata
   ): Promise<void> {
-    const timestamp = Date.now();
-    const filenameBase = `${siteName}-screenshot-${timestamp}`;
-
-    const captureMetadata = {
-      ...metadata,
-      timestamp,
-    };
-
-    if (config.logging) {
-      console.log(`${LOG_PREFIX} Capturing full page`);
-    }
-
-    const canvas = await html2canvas(document.body, {
+    const result = await ScreenshotUtils.captureFullPageScreenshot({
+      quality: config.quality,
       useCORS: config.useCORS,
-      allowTaint: false,
       backgroundColor: config.backgroundColor,
-      scale: config.scale,
       logging: config.logging,
-      ignoreElements: (element: Element) => {
-        return element.tagName === 'SCRIPT';
-      },
     });
 
-    if (config.logging) {
-      console.log(`${LOG_PREFIX} Screenshot captured, converting to blob...`);
-    }
-
-    const blob = await canvasToBlob(canvas, config.quality);
-    const filename = `${filenameBase}.png`;
+    const filename = `${siteName}-screenshot-${result.timestamp}.png`;
+    const captureMetadata = {
+      ...metadata,
+      timestamp: result.timestamp,
+    };
 
     // Fire and forget upload
     uploadScreenshot(
-      blob,
+      result.blob,
       filename,
       config.uploadUrl,
       captureMetadata,
