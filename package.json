@@ -3,6 +3,7 @@
   "version": "0.0.17",
   "description": "A lightweight JavaScript/TypeScript SDK for capturing user interactions on web pages and sending them into the Crow-B3 analytics/data pipeline.",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "type": "module",
   "scripts": {
     "build": "tsc",
@@ -25,6 +26,7 @@
   "devDependencies": {
     "@antfu/eslint-config": "^6.2.0",
     "@commitlint/config-conventional": "^20.0.0",
+    "@types/node": "^24.10.1",
     "commitlint": "^20.1.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
@@ -39,5 +41,9 @@
     "*.{json,md,css,scss,html,yml,yaml}": [
       "prettier --write"
     ]
+  },
+  "dependencies": {
+    "html2canvas-pro": "^1.5.13",
+    "ky": "^1.14.0"
   }
 }
