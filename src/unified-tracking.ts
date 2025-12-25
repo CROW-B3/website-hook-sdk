@@ -37,14 +37,18 @@ export namespace UnifiedTracking {
    * Configuration for unified tracking
    */
   export interface Config {
-    batchInterval?: number;
+    scrollStopDelay?: number; // Delay in ms after scroll stops before capturing (default: 150ms)
+    maxBufferSize?: number; // Max mouse coordinates to buffer before forcing send (default: 10000)
+    maxBatchTime?: number; // Max time in ms before forcing batch send (default: 30000ms)
     screenshotQuality?: number;
     useCORS?: boolean;
     backgroundColor?: string;
     logging?: boolean;
   }
 
-  const DEFAULT_BATCH_INTERVAL_MS = 500;
+  const DEFAULT_SCROLL_STOP_DELAY_MS = 150;
+  const DEFAULT_MAX_BUFFER_SIZE = 10000;
+  const DEFAULT_MAX_BATCH_TIME_MS = 30000; // 30 seconds
   const DEFAULT_QUALITY = 0.92;
   const DEFAULT_BACKGROUND_COLOR = '#ffffff';
   const LOG_PREFIX = '[UnifiedTracking]';
@@ -156,7 +160,7 @@ export namespace UnifiedTracking {
   }
 
   /**
-   * Initialize unified tracking
+   * Initialize unified tracking with scroll-based batching
    */
   export function init(config: Config = {}): void {
     if (isInitialized) {
@@ -177,7 +181,10 @@ export namespace UnifiedTracking {
     const { hostname, siteName } = getSiteInfo();
     const environment = getEnvironment();
     const uploadUrl = buildUploadUrl();
-    const batchInterval = config.batchInterval ?? DEFAULT_BATCH_INTERVAL_MS;
+    const scrollStopDelay =
+      config.scrollStopDelay ?? DEFAULT_SCROLL_STOP_DELAY_MS;
+    const maxBufferSize = config.maxBufferSize ?? DEFAULT_MAX_BUFFER_SIZE;
+    const maxBatchTime = config.maxBatchTime ?? DEFAULT_MAX_BATCH_TIME_MS;
     const quality = config.screenshotQuality ?? DEFAULT_QUALITY;
     const useCORS = config.useCORS ?? true;
     const backgroundColor = config.backgroundColor ?? DEFAULT_BACKGROUND_COLOR;
@@ -185,7 +192,9 @@ export namespace UnifiedTracking {
 
     if (logging) {
       console.log(`${LOG_PREFIX} Initializing with config:`, {
-        batchInterval,
+        scrollStopDelay,
+        maxBufferSize,
+        maxBatchTime,
         quality,
         useCORS,
         backgroundColor,
@@ -198,116 +207,293 @@ export namespace UnifiedTracking {
     }
 
     // Tracking state
-    let coordinateBuffer: PointerTracking.CoordinateData[] = [];
+    let activeBuffer: PointerTracking.CoordinateData[] = [];
     let batchStartTime = Date.now();
-    let hasStartedTracking = false; // Track if we've started sending batches
-    let intervalId: number | null = null;
+    let hasFirstInteraction = false; // Track if user has interacted
+    let isCapturingScreenshot = false; // Mutex to prevent concurrent captures
+    let scrollDebounceTimer: number | null = null;
+    let maxBatchTimeTimer: number | null = null;
 
     /**
-     * Send unified batch
+     * Send immediate screenshot on first interaction
      */
-    const sendBatch = async (): Promise<void> => {
-      const batchEndTime = Date.now();
+    const sendImmediateScreenshot = async (): Promise<void> => {
+      try {
+        if (logging) {
+          console.log(`${LOG_PREFIX} Capturing and sending initial screenshot`);
+        }
 
-      // After first mouse movement, always send batches (even if no data)
-      // This ensures continuous 500ms updates
-      if (!hasStartedTracking) {
-        // Don't send if tracking hasn't started yet
+        const screenshot = await captureViewportScreenshot(
+          siteName,
+          quality,
+          useCORS,
+          backgroundColor,
+          logging
+        );
+
+        const batch: UnifiedBatch = {
+          sessionId,
+          url: window.location.href,
+          site: siteName,
+          hostname,
+          environment,
+          batchStartTime: Date.now(),
+          batchEndTime: Date.now(),
+        };
+
+        if (screenshot) {
+          batch.screenshot = screenshot;
+        }
+
+        uploadUnifiedBatch(batch, uploadUrl, logging);
+        batchStartTime = Date.now();
+      } catch (error) {
+        console.error(`${LOG_PREFIX} Error sending initial screenshot:`, error);
+      }
+    };
+
+    /**
+     * Handle scroll stopped - send batch with mouse data and new screenshot
+     */
+    const onScrollStopped = async (): Promise<void> => {
+      // Prevent concurrent screenshot captures
+      if (isCapturingScreenshot) {
+        if (logging) {
+          console.log(
+            `${LOG_PREFIX} Already capturing screenshot, skipping scroll-stop trigger`
+          );
+        }
         return;
       }
 
-      let screenshot: UnifiedBatch['screenshot'] | null = null;
+      isCapturingScreenshot = true;
 
-      // Capture screenshot in every batch after tracking starts
-      screenshot = await captureViewportScreenshot(
-        siteName,
-        quality,
-        useCORS,
-        backgroundColor,
-        logging
-      );
+      try {
+        // Freeze current buffer and start new one
+        const frozenBuffer = activeBuffer;
+        const frozenStartTime = batchStartTime;
+        activeBuffer = [];
+        batchStartTime = Date.now();
 
-      // Create unified batch
-      const batch: UnifiedBatch = {
-        sessionId,
-        url: window.location.href,
-        site: siteName,
-        hostname,
-        environment,
-        batchStartTime,
-        batchEndTime,
-      };
+        if (logging) {
+          console.log(
+            `${LOG_PREFIX} Scroll stopped, capturing screenshot and sending batch with ${frozenBuffer.length} coordinates`
+          );
+        }
 
-      // Add screenshot if captured
-      if (screenshot) {
-        batch.screenshot = screenshot;
-      }
+        // Capture screenshot (async, may take 100-500ms)
+        const screenshot = await captureViewportScreenshot(
+          siteName,
+          quality,
+          useCORS,
+          backgroundColor,
+          logging
+        );
 
-      // Add pointer data if available
-      if (coordinateBuffer.length > 0) {
-        batch.pointerData = {
-          coordinates: [...coordinateBuffer],
-          coordinateCount: coordinateBuffer.length,
+        // Create batch with frozen data
+        const batch: UnifiedBatch = {
+          sessionId,
+          url: window.location.href,
+          site: siteName,
+          hostname,
+          environment,
+          batchStartTime: frozenStartTime,
+          batchEndTime: Date.now(),
         };
+
+        // Add screenshot if captured
+        if (screenshot) {
+          batch.screenshot = screenshot;
+        }
+
+        // Add pointer data if available
+        if (frozenBuffer.length > 0) {
+          batch.pointerData = {
+            coordinates: frozenBuffer,
+            coordinateCount: frozenBuffer.length,
+          };
+        }
+
+        // Upload batch
+        uploadUnifiedBatch(batch, uploadUrl, logging);
+
+        // Reset max batch time timer
+        if (maxBatchTimeTimer !== null) {
+          clearTimeout(maxBatchTimeTimer);
+        }
+        maxBatchTimeTimer = setTimeout(() => {
+          if (logging) {
+            console.log(
+              `${LOG_PREFIX} Max batch time (${maxBatchTime}ms) reached, forcing batch send`
+            );
+          }
+          onScrollStopped();
+        }, maxBatchTime) as unknown as number;
+      } catch (error) {
+        console.error(`${LOG_PREFIX} Error in scroll-stop handler:`, error);
+      } finally {
+        isCapturingScreenshot = false;
       }
-
-      // Reset state for next batch
-      coordinateBuffer = [];
-      batchStartTime = Date.now();
-
-      // Always upload batch after tracking has started
-      // This ensures continuous 500ms updates even if no mouse movement
-      uploadUnifiedBatch(batch, uploadUrl, logging);
     };
 
     /**
-     * Handle pointer move events
+     * Handle scroll events with debouncing
+     */
+    const handleScroll = (): void => {
+      // Clear existing debounce timer
+      if (scrollDebounceTimer !== null) {
+        clearTimeout(scrollDebounceTimer);
+      }
+
+      // Set new timer to detect "scroll stopped"
+      scrollDebounceTimer = setTimeout(() => {
+        onScrollStopped();
+      }, scrollStopDelay) as unknown as number;
+    };
+
+    /**
+     * Handle pointer move events - buffer coordinates
      */
     const handlePointerMove = (event: PointerEvent): void => {
-      // Add coordinate to buffer
       const coordinate = PointerTracking.createCoordinate(event);
-      coordinateBuffer.push(coordinate);
+      activeBuffer.push(coordinate);
 
-      // On first mouse movement, start continuous batching with screenshots
-      if (!hasStartedTracking) {
-        hasStartedTracking = true;
-
+      // Safety check: force send if buffer gets too large
+      if (activeBuffer.length >= maxBufferSize) {
         if (logging) {
-          console.log(
-            `${LOG_PREFIX} First mouse movement detected, starting continuous batching with screenshots every ${batchInterval}ms`
+          console.warn(
+            `${LOG_PREFIX} Buffer overflow (${activeBuffer.length} coordinates), forcing batch send`
           );
         }
+        onScrollStopped();
       }
     };
 
     /**
-     * Handle page unload - flush remaining data
+     * Handle first user interaction - capture and send initial screenshot
      */
-    const handleBeforeUnload = (): void => {
-      if (hasStartedTracking) {
+    const handleFirstInteraction = (): void => {
+      if (hasFirstInteraction) return;
+
+      hasFirstInteraction = true;
+
+      if (logging) {
+        console.log(
+          `${LOG_PREFIX} First interaction detected, sending initial screenshot`
+        );
+      }
+
+      // Send immediate screenshot
+      sendImmediateScreenshot();
+
+      // Start tracking mouse movements
+      document.addEventListener('pointermove', handlePointerMove);
+
+      // Start tracking scrolls
+      window.addEventListener('scroll', handleScroll, { passive: true });
+
+      // Remove first interaction listeners (no longer needed)
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('keydown', handleFirstInteraction);
+      document.removeEventListener('touchstart', handleFirstInteraction);
+
+      // Start max batch time timer
+      maxBatchTimeTimer = setTimeout(() => {
         if (logging) {
           console.log(
-            `${LOG_PREFIX} Page unloading, flushing final batch with ${coordinateBuffer.length} coordinates`
+            `${LOG_PREFIX} Max batch time (${maxBatchTime}ms) reached, forcing batch send`
           );
         }
-        // Clear interval to prevent duplicate sends
-        if (intervalId !== null) {
-          clearInterval(intervalId);
+        onScrollStopped();
+      }, maxBatchTime) as unknown as number;
+    };
+
+    /**
+     * Handle page unload - flush remaining data with sendBeacon
+     */
+    const handleBeforeUnload = (): void => {
+      if (!hasFirstInteraction) return;
+
+      if (logging) {
+        console.log(
+          `${LOG_PREFIX} Page unloading, flushing final batch with ${activeBuffer.length} coordinates`
+        );
+      }
+
+      // Clear timers
+      if (scrollDebounceTimer !== null) {
+        clearTimeout(scrollDebounceTimer);
+      }
+      if (maxBatchTimeTimer !== null) {
+        clearTimeout(maxBatchTimeTimer);
+      }
+
+      // Create final batch without screenshot (no time for async capture)
+      if (activeBuffer.length > 0) {
+        const batch: UnifiedBatch = {
+          sessionId,
+          url: window.location.href,
+          site: siteName,
+          hostname,
+          environment,
+          batchStartTime,
+          batchEndTime: Date.now(),
+          pointerData: {
+            coordinates: activeBuffer,
+            coordinateCount: activeBuffer.length,
+          },
+        };
+
+        // Try to use sendBeacon for more reliable delivery
+        try {
+          const formData = new FormData();
+          formData.append('sessionId', batch.sessionId);
+          formData.append('url', batch.url);
+          formData.append('site', batch.site);
+          formData.append('hostname', batch.hostname);
+          formData.append('environment', batch.environment);
+          formData.append('batchStartTime', batch.batchStartTime.toString());
+          formData.append('batchEndTime', batch.batchEndTime.toString());
+
+          if (batch.pointerData) {
+            formData.append(
+              'pointerData',
+              JSON.stringify(batch.pointerData.coordinates)
+            );
+            formData.append(
+              'coordinateCount',
+              batch.pointerData.coordinateCount.toString()
+            );
+          }
+
+          const sent = navigator.sendBeacon(uploadUrl, formData);
+          if (logging) {
+            console.log(
+              `${LOG_PREFIX} sendBeacon ${sent ? 'succeeded' : 'failed'}`
+            );
+          }
+        } catch (error) {
+          console.error(`${LOG_PREFIX} Error in beforeunload:`, error);
         }
-        sendBatch();
       }
     };
 
-    // Setup event listeners
-    document.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    // Setup first interaction listeners
+    document.addEventListener('click', handleFirstInteraction, { once: false });
+    document.addEventListener('keydown', handleFirstInteraction, {
+      once: false,
+    });
+    document.addEventListener('touchstart', handleFirstInteraction, {
+      once: false,
+      passive: true,
+    });
 
-    // Setup batch interval - runs every 500ms continuously
-    intervalId = setInterval(sendBatch, batchInterval) as unknown as number;
+    // Setup page unload listener
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     if (logging) {
       console.log(
-        `${LOG_PREFIX} Unified tracking initialized. Waiting for first mouse movement to start continuous ${batchInterval}ms batching (screenshots + mouse data)`
+        `${LOG_PREFIX} Scroll-based tracking initialized. Waiting for first user interaction (click/key/touch) to start tracking`
       );
     }
   }
