@@ -12,17 +12,3 @@ import { getEnvVar } from './utils/environment';
 export const NEXT_BASE_URL =
   getEnvVar('NEXT_PUBLIC_BE_BASE_URL') ||
   'https://crow-web-ingest-worker-dev.bitbybit-b3.workers.dev';
-
-/** Endpoint path segments - centralized for easy refactoring */
-export const ENDPOINT_PATHS = {
-  /** Screenshot upload endpoint path */
-  SCREENSHOTS: '/screenshots',
-  /** Pointer data upload endpoint path */
-  POINTER_DATA: '/pointer-data',
-} as const;
-
-/** Full default screenshot upload URL */
-export const DEFAULT_SCREENSHOT_UPLOAD_URL = `${NEXT_BASE_URL}${ENDPOINT_PATHS.SCREENSHOTS}`;
-
-/** Full default pointer data upload URL */
-export const DEFAULT_POINTER_DATA_UPLOAD_URL = `${NEXT_BASE_URL}${ENDPOINT_PATHS.POINTER_DATA}`;
