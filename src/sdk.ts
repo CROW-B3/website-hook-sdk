@@ -43,19 +43,12 @@ export class CrowSDK {
       capture: {
         pageViews: config.capture?.pageViews ?? true,
         clicks: config.capture?.clicks ?? true,
-        forms: config.capture?.forms ?? false,
         errors: config.capture?.errors ?? true,
-        performance: config.capture?.performance ?? false,
       },
       batching: {
         enabled: config.batching?.enabled ?? true,
         maxBatchSize: config.batching?.maxBatchSize ?? 10,
         flushInterval: config.batching?.flushInterval ?? 5000,
-      },
-      privacy: {
-        maskPasswords: config.privacy?.maskPasswords ?? true,
-        maskCreditCards: config.privacy?.maskCreditCards ?? true,
-        respectDoNotTrack: config.privacy?.respectDoNotTrack ?? true,
       },
       debug: config.debug ?? false,
     };

@@ -7,19 +7,12 @@ export interface CrowConfig {
   capture?: {
     pageViews?: boolean;
     clicks?: boolean;
-    forms?: boolean;
     errors?: boolean;
-    performance?: boolean;
   };
   batching?: {
     enabled?: boolean;
     maxBatchSize?: number;
     flushInterval?: number; // milliseconds
-  };
-  privacy?: {
-    maskPasswords?: boolean;
-    maskCreditCards?: boolean;
-    respectDoNotTrack?: boolean;
   };
   debug?: boolean;
 }
