@@ -10,6 +10,7 @@ import { ApiClient } from './api/client';
 import { extendSession, getAnonymousId, getSessionId } from './utils/id';
 import { EventQueue } from './utils/queue';
 import { isBrowserEnvironment } from './utils/environment';
+import { NEXT_BASE_URL } from './constants';
 
 /**
  * Main Crow SDK class
@@ -37,9 +38,7 @@ export class CrowSDK {
     // Set default configuration
     this.config = {
       projectId: config.projectId,
-      apiEndpoint:
-        config.apiEndpoint ||
-        'https://crow-web-ingest-worker-dev.bitbybit-b3.workers.dev',
+      apiEndpoint: config.apiEndpoint || NEXT_BASE_URL,
       capture: {
         pageViews: config.capture?.pageViews ?? true,
         clicks: config.capture?.clicks ?? true,
