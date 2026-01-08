@@ -12,6 +12,18 @@ import { EventQueue } from './utils/queue';
 import { isBrowserEnvironment } from './utils/environment';
 import { NEXT_BASE_URL } from './constants';
 
+const DEFAULT_CAPTURE_CONFIG = {
+  pageViews: true,
+  clicks: true,
+  errors: true,
+} as const;
+
+const DEFAULT_BATCHING_CONFIG = {
+  enabled: true,
+  maxBatchSize: 10,
+  flushInterval: 5000,
+} as const;
+
 /**
  * Internal SDK configuration (includes hardcoded settings)
  */
@@ -54,22 +66,12 @@ export class CrowSDK {
       );
     }
 
-    // Set configuration with hardcoded internal settings
-    // Only projectId and debug are user-configurable
     this.config = {
       projectId: config.projectId,
-      apiEndpoint: NEXT_BASE_URL, // Hardcoded - users cannot override
-      capture: {
-        pageViews: true, // Hardcoded - always enabled
-        clicks: true, // Hardcoded - always enabled
-        errors: true, // Hardcoded - always enabled
-      },
-      batching: {
-        enabled: true, // Hardcoded - always enabled
-        maxBatchSize: 10, // Hardcoded
-        flushInterval: 5000, // Hardcoded
-      },
-      debug: config.debug ?? false, // User-configurable
+      apiEndpoint: NEXT_BASE_URL,
+      capture: DEFAULT_CAPTURE_CONFIG,
+      batching: DEFAULT_BATCHING_CONFIG,
+      debug: config.debug ?? false,
     };
 
     // Initialize API client
