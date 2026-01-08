@@ -13,10 +13,29 @@ import { isBrowserEnvironment } from './utils/environment';
 import { NEXT_BASE_URL } from './constants';
 
 /**
+ * Internal SDK configuration (includes hardcoded settings)
+ */
+interface InternalConfig {
+  projectId: string;
+  apiEndpoint: string;
+  capture: {
+    pageViews: boolean;
+    clicks: boolean;
+    errors: boolean;
+  };
+  batching: {
+    enabled: boolean;
+    maxBatchSize: number;
+    flushInterval: number;
+  };
+  debug: boolean;
+}
+
+/**
  * Main Crow SDK class
  */
 export class CrowSDK {
-  private config: Required<CrowConfig>;
+  private config: InternalConfig;
   private apiClient: ApiClient;
   private sessionId: string;
   private anonymousId: string;
@@ -35,21 +54,22 @@ export class CrowSDK {
       );
     }
 
-    // Set default configuration
+    // Set configuration with hardcoded internal settings
+    // Only projectId and debug are user-configurable
     this.config = {
       projectId: config.projectId,
-      apiEndpoint: config.apiEndpoint || NEXT_BASE_URL,
+      apiEndpoint: NEXT_BASE_URL, // Hardcoded - users cannot override
       capture: {
-        pageViews: config.capture?.pageViews ?? true,
-        clicks: config.capture?.clicks ?? true,
-        errors: config.capture?.errors ?? true,
+        pageViews: true, // Hardcoded - always enabled
+        clicks: true, // Hardcoded - always enabled
+        errors: true, // Hardcoded - always enabled
       },
       batching: {
-        enabled: config.batching?.enabled ?? true,
-        maxBatchSize: config.batching?.maxBatchSize ?? 10,
-        flushInterval: config.batching?.flushInterval ?? 5000,
+        enabled: true, // Hardcoded - always enabled
+        maxBatchSize: 10, // Hardcoded
+        flushInterval: 5000, // Hardcoded
       },
-      debug: config.debug ?? false,
+      debug: config.debug ?? false, // User-configurable
     };
 
     // Initialize API client

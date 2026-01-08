@@ -1,20 +1,11 @@
 /**
  * SDK Configuration options
+ * Only projectId and debug are user-configurable.
+ * All other settings are hardcoded internally.
  */
 export interface CrowConfig {
   projectId: string; // API key for the project
-  apiEndpoint?: string; // Override default endpoint
-  capture?: {
-    pageViews?: boolean;
-    clicks?: boolean;
-    errors?: boolean;
-  };
-  batching?: {
-    enabled?: boolean;
-    maxBatchSize?: number;
-    flushInterval?: number; // milliseconds
-  };
-  debug?: boolean;
+  debug?: boolean; // Enable debug logging
 }
 
 /**
