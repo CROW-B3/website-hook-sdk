@@ -38,18 +38,3 @@ export async function initCrow(config: CrowConfig): Promise<CrowSDK> {
 
   return globalInstance;
 }
-
-/**
- * Get the current SDK instance
- * @returns Current SDK instance or null
- */
-export function getCrow(): CrowSDK | null {
-  return globalInstance;
-}
-
-// Default export
-export default {
-  initCrow,
-  getCrow,
-  CrowSDK,
-};
