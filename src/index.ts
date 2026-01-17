@@ -4,6 +4,7 @@ import type { CrowConfig } from './types';
 
 export type { CrowSDK };
 export type * from './types';
+export { createCrowSDK };
 
 let globalSdkInstance: CrowSDK | null = null;
 
