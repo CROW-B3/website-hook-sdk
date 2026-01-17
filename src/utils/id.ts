@@ -1,86 +1,88 @@
-/**
- * Generate a unique ID with timestamp and random string
- */
-export function generateId(prefix: string): string {
-  const timestamp = Date.now().toString(36);
-  const randomStr = Math.random().toString(36).substring(2, 15);
-  return `${prefix}_${timestamp}${randomStr}`;
+const THIRTY_MINUTES_IN_MS = 30 * 60 * 1000;
+const ANONYMOUS_ID_STORAGE_KEY = 'crow_anonymous_id';
+const SESSION_ID_STORAGE_KEY = 'crow_session_id';
+const SESSION_EXPIRY_STORAGE_KEY = 'crow_session_expiry';
+
+export function generateUniqueIdWithPrefix(prefix: string): string {
+  const timestampBase36 = Date.now().toString(36);
+  const randomStringBase36 = Math.random().toString(36).substring(2, 15);
+  return `${prefix}_${timestampBase36}${randomStringBase36}`;
 }
 
-/**
- * Get or create anonymous user ID
- */
-export function getAnonymousId(): string {
-  const key = 'crow_anonymous_id';
-
-  // Try to get existing ID from localStorage
+function tryGetItemFromLocalStorage(key: string): string | null {
   try {
-    const existingId = localStorage.getItem(key);
-    if (existingId) {
-      return existingId;
-    }
-  } catch (error) {
-    // localStorage might not be available
+    return localStorage.getItem(key);
+  } catch {
+    return null;
   }
-
-  // Generate new ID
-  const newId = generateId('anon');
-
-  // Try to save it
-  try {
-    localStorage.setItem(key, newId);
-  } catch (error) {
-    // Silently fail if localStorage is not available
-  }
-
-  return newId;
 }
 
-/**
- * Get or create session ID
- */
-export function getSessionId(): string {
-  const key = 'crow_session_id';
-  const expiryKey = 'crow_session_expiry';
-  const sessionTimeout = 30 * 60 * 1000; // 30 minutes
-
+function trySetItemInLocalStorage(key: string, value: string): void {
   try {
-    const existingId = sessionStorage.getItem(key);
-    const expiry = sessionStorage.getItem(expiryKey);
-
-    if (existingId && expiry && Date.now() < Number.parseInt(expiry)) {
-      // Session is still valid
-      return existingId;
-    }
-  } catch (error) {
-    // sessionStorage might not be available
+    localStorage.setItem(key, value);
+  } catch {
+    return;
   }
-
-  // Generate new session ID
-  const newId = generateId('sess');
-  const newExpiry = (Date.now() + sessionTimeout).toString();
-
-  try {
-    sessionStorage.setItem(key, newId);
-    sessionStorage.setItem(expiryKey, newExpiry);
-  } catch (error) {
-    // Silently fail if sessionStorage is not available
-  }
-
-  return newId;
 }
 
-/**
- * Extend session expiry
- */
-export function extendSession(): void {
-  const expiryKey = 'crow_session_expiry';
-  const sessionTimeout = 30 * 60 * 1000; // 30 minutes
+export function getOrCreateAnonymousId(): string {
+  const existingAnonymousId = tryGetItemFromLocalStorage(
+    ANONYMOUS_ID_STORAGE_KEY
+  );
+  if (existingAnonymousId) return existingAnonymousId;
 
+  const newAnonymousId = generateUniqueIdWithPrefix('anon');
+  trySetItemInLocalStorage(ANONYMOUS_ID_STORAGE_KEY, newAnonymousId);
+  return newAnonymousId;
+}
+
+function tryGetItemFromSessionStorage(key: string): string | null {
   try {
-    const newExpiry = (Date.now() + sessionTimeout).toString();
-    sessionStorage.setItem(expiryKey, newExpiry);
-  } catch (error) {
-    // Silently fail
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
   }
+}
+
+function trySetItemInSessionStorage(key: string, value: string): void {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    return;
+  }
+}
+
+function isSessionStillValid(expiryTimestamp: string | null): boolean {
+  if (!expiryTimestamp) return false;
+  return Date.now() < Number.parseInt(expiryTimestamp);
+}
+
+function calculateSessionExpiryTimestamp(): string {
+  return (Date.now() + THIRTY_MINUTES_IN_MS).toString();
+}
+
+export function getOrCreateSessionId(): string {
+  const existingSessionId = tryGetItemFromSessionStorage(
+    SESSION_ID_STORAGE_KEY
+  );
+  const sessionExpiry = tryGetItemFromSessionStorage(
+    SESSION_EXPIRY_STORAGE_KEY
+  );
+
+  if (existingSessionId && isSessionStillValid(sessionExpiry)) {
+    return existingSessionId;
+  }
+
+  const newSessionId = generateUniqueIdWithPrefix('sess');
+  const newExpiryTimestamp = calculateSessionExpiryTimestamp();
+
+  trySetItemInSessionStorage(SESSION_ID_STORAGE_KEY, newSessionId);
+  trySetItemInSessionStorage(SESSION_EXPIRY_STORAGE_KEY, newExpiryTimestamp);
+
+  return newSessionId;
+}
+
+export function extendCurrentSessionExpiry(): void {
+  const newExpiryTimestamp = calculateSessionExpiryTimestamp();
+  trySetItemInSessionStorage(SESSION_EXPIRY_STORAGE_KEY, newExpiryTimestamp);
 }

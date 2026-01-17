@@ -1,88 +1,97 @@
 import type { BaseEvent } from '../types';
 
-/**
- * Event queue for batching events before sending to the server
- */
-export class EventQueue {
-  private queue: BaseEvent[] = [];
-  private readonly maxSize: number;
-  private readonly flushInterval: number;
-  private flushTimer: number | null = null;
-  private readonly onFlush: (events: BaseEvent[]) => Promise<void>;
+export type EventQueue = {
+  addEventToQueue: (event: BaseEvent) => void;
+  flushAllQueuedEvents: () => Promise<void>;
+  destroyQueue: () => void;
+  getCurrentQueueSize: () => number;
+};
 
-  constructor(
-    maxSize: number,
-    flushInterval: number,
-    onFlush: (events: BaseEvent[]) => Promise<void>
-  ) {
-    this.maxSize = maxSize;
-    this.flushInterval = flushInterval;
-    this.onFlush = onFlush;
-    this.startFlushTimer();
+type EventQueueState = {
+  queuedEvents: BaseEvent[];
+  flushTimerId: number | null;
+};
+
+function isWindowDefined(): boolean {
+  return typeof window !== 'undefined';
+}
+
+async function sendEventsAndHandleFailure(
+  eventsToSend: BaseEvent[],
+  state: EventQueueState,
+  onFlushCallback: (events: BaseEvent[]) => Promise<void>
+): Promise<void> {
+  try {
+    await onFlushCallback(eventsToSend);
+  } catch (error) {
+    console.error('[Crow] Error flushing events:', error);
+    state.queuedEvents = [...eventsToSend, ...state.queuedEvents];
+    throw error;
   }
+}
 
-  /**
-   * Add an event to the queue
-   */
-  add(event: BaseEvent): void {
-    this.queue.push(event);
+async function flushEventsFromQueue(
+  state: EventQueueState,
+  onFlushCallback: (events: BaseEvent[]) => Promise<void>
+): Promise<void> {
+  if (state.queuedEvents.length === 0) return;
 
-    // Flush if queue is full
-    if (this.queue.length >= this.maxSize) {
-      this.flush();
-    }
-  }
+  const eventsToSend = [...state.queuedEvents];
+  state.queuedEvents = [];
 
-  /**
-   * Flush all events to the server
-   */
-  async flush(): Promise<void> {
-    if (this.queue.length === 0) {
-      return;
-    }
+  await sendEventsAndHandleFailure(eventsToSend, state, onFlushCallback);
+}
 
-    const eventsToSend = [...this.queue];
-    this.queue = [];
+function startAutomaticFlushTimer(
+  flushIntervalMs: number,
+  state: EventQueueState,
+  onFlushCallback: (events: BaseEvent[]) => Promise<void>
+): void {
+  if (!isWindowDefined()) return;
 
-    try {
-      await this.onFlush(eventsToSend);
-    } catch (error) {
-      console.error('[Crow] Error flushing events:', error);
-      // Re-add events to queue on failure
-      this.queue = [...eventsToSend, ...this.queue];
-    }
-  }
+  state.flushTimerId = window.setInterval(() => {
+    flushEventsFromQueue(state, onFlushCallback);
+  }, flushIntervalMs);
+}
 
-  /**
-   * Start the automatic flush timer
-   */
-  private startFlushTimer(): void {
-    if (typeof window === 'undefined') {
-      return;
-    }
+function stopFlushTimerIfExists(state: EventQueueState): void {
+  if (!state.flushTimerId) return;
+  if (!isWindowDefined()) return;
 
-    this.flushTimer = window.setInterval(() => {
-      this.flush();
-    }, this.flushInterval);
-  }
+  window.clearInterval(state.flushTimerId);
+  state.flushTimerId = null;
+}
 
-  /**
-   * Stop the flush timer
-   */
-  destroy(): void {
-    if (this.flushTimer !== null && typeof window !== 'undefined') {
-      window.clearInterval(this.flushTimer);
-      this.flushTimer = null;
-    }
+export function createEventQueue(
+  maxBatchSize: number,
+  flushIntervalMs: number,
+  onFlushCallback: (events: BaseEvent[]) => Promise<void>
+): EventQueue {
+  const state: EventQueueState = {
+    queuedEvents: [],
+    flushTimerId: null,
+  };
 
-    // Flush remaining events
-    this.flush();
-  }
+  startAutomaticFlushTimer(flushIntervalMs, state, onFlushCallback);
 
-  /**
-   * Get current queue size
-   */
-  size(): number {
-    return this.queue.length;
-  }
+  return {
+    addEventToQueue: (event: BaseEvent) => {
+      state.queuedEvents.push(event);
+
+      if (state.queuedEvents.length >= maxBatchSize) {
+        flushEventsFromQueue(state, onFlushCallback);
+      }
+    },
+
+    flushAllQueuedEvents: async () => {
+      await flushEventsFromQueue(state, onFlushCallback);
+    },
+
+    destroyQueue: () => {
+      stopFlushTimerIfExists(state);
+      flushEventsFromQueue(state, onFlushCallback);
+    },
+
+    getCurrentQueueSize: () => state.queuedEvents.length,
+  };
 }

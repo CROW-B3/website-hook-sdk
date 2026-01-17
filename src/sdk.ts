@@ -6,9 +6,15 @@ import type {
   SessionContext,
   User,
 } from './types';
-import { ApiClient } from './api/client';
-import { extendSession, getAnonymousId, getSessionId } from './utils/id';
-import { EventQueue } from './utils/queue';
+import type { ApiClient } from './api/client';
+import type { EventQueue } from './utils/queue';
+import { createApiClient } from './api/client';
+import {
+  extendCurrentSessionExpiry,
+  getOrCreateAnonymousId,
+  getOrCreateSessionId,
+} from './utils/id';
+import { createEventQueue } from './utils/queue';
 import { isBrowserEnvironment } from './utils/environment';
 import { NEXT_BASE_URL } from './constants';
 
@@ -24,10 +30,7 @@ const DEFAULT_BATCHING_CONFIG = {
   flushInterval: 5000,
 } as const;
 
-/**
- * Internal SDK configuration (includes hardcoded settings)
- */
-interface InternalConfig {
+type InternalConfig = {
   projectId: string;
   apiEndpoint: string;
   capture: {
@@ -41,320 +44,352 @@ interface InternalConfig {
     flushInterval: number;
   };
   debug: boolean;
+};
+
+type SdkState = {
+  config: InternalConfig;
+  apiClient: ApiClient;
+  sessionId: string;
+  anonymousId: string;
+  user: User;
+  eventQueue: EventQueue | null;
+  sessionStartTime: number;
+  pageViewCount: number;
+  interactionCount: number;
+  isInitialized: boolean;
+};
+
+export type CrowSDK = {
+  initializeSdk: () => Promise<void>;
+  trackEvent: (eventType: EventType, data?: Record<string, any>) => void;
+  trackPageView: (data?: Record<string, any>) => void;
+  trackClick: (data?: Record<string, any>) => void;
+  identifyUser: (userId: string, traits?: Record<string, any>) => void;
+  flushQueuedEvents: () => Promise<void>;
+  destroySdk: () => void;
+};
+
+function throwIfNotBrowserEnvironment(): void {
+  if (isBrowserEnvironment()) return;
+  throw new Error('[Crow] SDK can only be initialized in browser environment');
 }
 
-/**
- * Main Crow SDK class
- */
-export class CrowSDK {
-  private config: InternalConfig;
-  private apiClient: ApiClient;
-  private sessionId: string;
-  private anonymousId: string;
-  private user: User | null = null;
-  private eventQueue: EventQueue | null = null;
-  private sessionStartTime: number;
-  private pageViewCount = 0;
-  private interactionCount = 0;
-  private isInitialized = false;
+function buildInternalConfig(userConfig: CrowConfig): InternalConfig {
+  return {
+    projectId: userConfig.projectId,
+    apiEndpoint: NEXT_BASE_URL,
+    capture: DEFAULT_CAPTURE_CONFIG,
+    batching: DEFAULT_BATCHING_CONFIG,
+    debug: userConfig.debug ?? false,
+  };
+}
 
-  constructor(config: CrowConfig) {
-    // Validate browser environment
-    if (!isBrowserEnvironment()) {
-      throw new Error(
-        '[Crow] SDK can only be initialized in browser environment'
-      );
-    }
+function logDebugMessage(state: SdkState, message: string, data?: any): void {
+  if (!state.config.debug) return;
+  console.log(`[Crow] ${message}`, data || '');
+}
 
-    this.config = {
-      projectId: config.projectId,
-      apiEndpoint: NEXT_BASE_URL,
-      capture: DEFAULT_CAPTURE_CONFIG,
-      batching: DEFAULT_BATCHING_CONFIG,
-      debug: config.debug ?? false,
-    };
+function getCurrentScreenSize(): ScreenSize {
+  return {
+    width: window.innerWidth,
+    height: window.innerHeight,
+  };
+}
 
-    // Initialize API client
-    this.apiClient = new ApiClient(this.config.apiEndpoint);
+function buildSessionContext(): SessionContext {
+  return {
+    url: window.location.href,
+    referrer: document.referrer,
+    userAgent: navigator.userAgent,
+    screenSize: getCurrentScreenSize(),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    locale: navigator.language,
+  };
+}
 
-    // Initialize session and user IDs
-    this.sessionId = getSessionId();
-    this.anonymousId = getAnonymousId();
-    this.sessionStartTime = Date.now();
+async function sendSessionStartRequest(state: SdkState): Promise<void> {
+  const sessionContext = buildSessionContext();
 
-    // Initialize user
-    this.user = {
-      anonymousId: this.anonymousId,
-    };
+  const response = await state.apiClient.startNewSession({
+    projectId: state.config.projectId,
+    sessionId: state.sessionId,
+    user: state.user,
+    context: sessionContext,
+  });
 
-    this.log('SDK initialized', { config: this.config });
+  logDebugMessage(state, 'Session started', { response });
+}
+
+function calculateSessionDuration(state: SdkState): number {
+  return Date.now() - state.sessionStartTime;
+}
+
+async function sendSessionEndRequest(state: SdkState): Promise<void> {
+  const sessionDuration = calculateSessionDuration(state);
+
+  const response = await state.apiClient.endCurrentSession({
+    projectId: state.config.projectId,
+    sessionId: state.sessionId,
+    duration: sessionDuration,
+    pageViews: state.pageViewCount,
+    interactions: state.interactionCount,
+  });
+
+  logDebugMessage(state, 'Session ended', {
+    response,
+    duration: sessionDuration,
+    pageViews: state.pageViewCount,
+    interactions: state.interactionCount,
+  });
+}
+
+function buildBaseEvent(
+  eventType: EventType,
+  eventData?: Record<string, any>
+): BaseEvent {
+  return {
+    type: eventType,
+    timestamp: Date.now(),
+    url: window.location.href,
+    referrer: document.referrer,
+    data: eventData,
+    userAgent: navigator.userAgent,
+    screenSize: getCurrentScreenSize(),
+  };
+}
+
+async function sendSingleEventToApi(
+  state: SdkState,
+  event: BaseEvent
+): Promise<void> {
+  const response = await state.apiClient.sendTrackingEvent({
+    projectId: state.config.projectId,
+    sessionId: state.sessionId,
+    event,
+    user: state.user,
+  });
+
+  logDebugMessage(state, 'Event sent', { event, response });
+}
+
+async function sendBatchedEventsToApi(
+  state: SdkState,
+  events: BaseEvent[]
+): Promise<void> {
+  if (events.length === 0) return;
+
+  const response = await state.apiClient.sendBatchedEvents({
+    projectId: state.config.projectId,
+    sessionId: state.sessionId,
+    events,
+    user: state.user,
+  });
+
+  logDebugMessage(state, 'Batch sent', { eventCount: events.length, response });
+}
+
+function queueOrSendEventImmediately(state: SdkState, event: BaseEvent): void {
+  if (state.config.batching.enabled && state.eventQueue) {
+    state.eventQueue.addEventToQueue(event);
+    logDebugMessage(state, 'Event queued', { event });
+    return;
   }
 
-  /**
-   * Initialize the SDK and start tracking
-   */
-  async init(): Promise<void> {
-    if (this.isInitialized) {
-      this.log('SDK already initialized');
-      return;
-    }
+  sendSingleEventToApi(state, event);
+}
 
-    // Start session
-    await this.startSession();
+function incrementPageViewCounter(state: SdkState): void {
+  state.pageViewCount++;
+}
 
-    // Initialize event queue if batching is enabled
-    if (this.config.batching.enabled) {
-      this.eventQueue = new EventQueue(
-        this.config.batching.maxBatchSize!,
-        this.config.batching.flushInterval!,
-        events => this.sendBatch(events)
-      );
-    }
+function incrementInteractionCounter(state: SdkState): void {
+  state.interactionCount++;
+}
 
-    // Set up auto-capture
-    this.setupAutoCapture();
-
-    // Set up page unload handler
-    this.setupPageUnloadHandler();
-
-    this.isInitialized = true;
-    this.log('SDK initialization complete');
+function updateEventCounters(state: SdkState, eventType: EventType): void {
+  if (eventType === 'pageview') {
+    incrementPageViewCounter(state);
+    return;
   }
 
-  /**
-   * Start a new session
-   */
-  private async startSession(): Promise<void> {
-    const context: SessionContext = {
-      url: window.location.href,
-      referrer: document.referrer,
-      userAgent: navigator.userAgent,
-      screenSize: this.getScreenSize(),
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      locale: navigator.language,
-    };
+  incrementInteractionCounter(state);
+}
 
-    const response = await this.apiClient.sessionStart({
-      projectId: this.config.projectId,
-      sessionId: this.sessionId,
-      user: this.user!,
-      context,
-    });
+function trackEventAndExtendSession(
+  state: SdkState,
+  eventType: EventType,
+  data?: Record<string, any>
+): void {
+  const event = buildBaseEvent(eventType, data);
+  queueOrSendEventImmediately(state, event);
+  updateEventCounters(state, eventType);
+  extendCurrentSessionExpiry();
+}
 
-    this.log('Session started', { response });
+function extractClickDataFromEvent(
+  clickEvent: MouseEvent
+): Record<string, any> {
+  const targetElement = clickEvent.target as HTMLElement;
+  return {
+    tagName: targetElement.tagName,
+    id: targetElement.id || undefined,
+    className: targetElement.className || undefined,
+    text: targetElement.textContent?.substring(0, 100),
+    autoCapture: true,
+  };
+}
+
+function setupClickAutoCapture(state: SdkState): void {
+  if (!state.config.capture.clicks) return;
+
+  document.addEventListener('click', clickEvent => {
+    const clickData = extractClickDataFromEvent(clickEvent);
+    trackEventAndExtendSession(state, 'click', clickData);
+  });
+}
+
+function extractErrorDataFromEvent(
+  errorEvent: ErrorEvent
+): Record<string, any> {
+  return {
+    message: errorEvent.message,
+    filename: errorEvent.filename,
+    lineno: errorEvent.lineno,
+    colno: errorEvent.colno,
+    autoCapture: true,
+  };
+}
+
+function setupErrorAutoCapture(state: SdkState): void {
+  if (!state.config.capture.errors) return;
+
+  window.addEventListener('error', errorEvent => {
+    const errorData = extractErrorDataFromEvent(errorEvent);
+    trackEventAndExtendSession(state, 'error', errorData);
+  });
+}
+
+function setupPageViewAutoCapture(state: SdkState): void {
+  if (!state.config.capture.pageViews) return;
+  trackEventAndExtendSession(state, 'pageview', { autoCapture: true });
+}
+
+function setupAllAutoCapture(state: SdkState): void {
+  setupPageViewAutoCapture(state);
+  setupClickAutoCapture(state);
+  setupErrorAutoCapture(state);
+}
+
+function flushQueueIfExists(state: SdkState): void {
+  if (!state.eventQueue) return;
+  state.eventQueue.flushAllQueuedEvents();
+}
+
+function setupPageUnloadHandler(state: SdkState): void {
+  window.addEventListener('beforeunload', () => {
+    flushQueueIfExists(state);
+    sendSessionEndRequest(state);
+  });
+}
+
+function createEventQueueIfBatchingEnabled(state: SdkState): void {
+  if (!state.config.batching.enabled) return;
+
+  state.eventQueue = createEventQueue(
+    state.config.batching.maxBatchSize,
+    state.config.batching.flushInterval,
+    events => sendBatchedEventsToApi(state, events)
+  );
+}
+
+async function initializeSdkInternal(state: SdkState): Promise<void> {
+  if (state.isInitialized) {
+    logDebugMessage(state, 'SDK already initialized');
+    return;
   }
 
-  /**
-   * End the current session
-   */
-  private async endSession(): Promise<void> {
-    const duration = Date.now() - this.sessionStartTime;
+  await sendSessionStartRequest(state);
+  createEventQueueIfBatchingEnabled(state);
+  setupAllAutoCapture(state);
+  setupPageUnloadHandler(state);
 
-    const response = await this.apiClient.sessionEnd({
-      projectId: this.config.projectId,
-      sessionId: this.sessionId,
-      duration,
-      pageViews: this.pageViewCount,
-      interactions: this.interactionCount,
-    });
+  state.isInitialized = true;
+  logDebugMessage(state, 'SDK initialization complete');
+}
 
-    this.log('Session ended', {
-      response,
-      duration,
-      pageViews: this.pageViewCount,
-      interactions: this.interactionCount,
-    });
-  }
+function updateUserIdentity(
+  state: SdkState,
+  userId: string,
+  traits?: Record<string, any>
+): void {
+  state.user = {
+    id: userId,
+    anonymousId: state.anonymousId,
+    traits,
+  };
 
-  /**
-   * Track a custom event
-   */
-  track(eventType: EventType, data?: Record<string, any>): void {
-    const event: BaseEvent = {
-      type: eventType,
-      timestamp: Date.now(),
-      url: window.location.href,
-      referrer: document.referrer,
-      data,
-      userAgent: navigator.userAgent,
-      screenSize: this.getScreenSize(),
-    };
+  logDebugMessage(state, 'User identified', { userId, traits });
+}
 
-    this.queueOrSendEvent(event);
+async function flushAllQueuedEvents(state: SdkState): Promise<void> {
+  if (!state.eventQueue) return;
+  await state.eventQueue.flushAllQueuedEvents();
+}
 
-    // Update counters
-    if (eventType === 'pageview') {
-      this.pageViewCount++;
-    } else {
-      this.interactionCount++;
-    }
+function destroyEventQueueIfExists(state: SdkState): void {
+  if (!state.eventQueue) return;
 
-    extendSession();
-  }
+  state.eventQueue.destroyQueue();
+  state.eventQueue = null;
+}
 
-  /**
-   * Track a page view
-   */
-  pageView(data?: Record<string, any>): void {
-    this.track('pageview', data);
-  }
+function destroySdkAndCleanup(state: SdkState): void {
+  destroyEventQueueIfExists(state);
+  sendSessionEndRequest(state);
+  state.isInitialized = false;
+  logDebugMessage(state, 'SDK destroyed');
+}
 
-  /**
-   * Track a click event
-   */
-  click(data?: Record<string, any>): void {
-    this.track('click', data);
-  }
+function makeGloballyAvailableForDebugging(sdkInstance: CrowSDK): void {
+  if (typeof window === 'undefined') return;
+  (window as any).crow = sdkInstance;
+}
 
-  /**
-   * Identify a user
-   */
-  identify(userId: string, traits?: Record<string, any>): void {
-    this.user = {
-      id: userId,
-      anonymousId: this.anonymousId,
-      traits,
-    };
+export function createCrowSDK(userConfig: CrowConfig): CrowSDK {
+  throwIfNotBrowserEnvironment();
 
-    this.log('User identified', { userId, traits });
-  }
+  const internalConfig = buildInternalConfig(userConfig);
+  const apiClient = createApiClient(internalConfig.apiEndpoint);
+  const sessionId = getOrCreateSessionId();
+  const anonymousId = getOrCreateAnonymousId();
 
-  /**
-   * Queue or send an event based on batching configuration
-   */
-  private queueOrSendEvent(event: BaseEvent): void {
-    if (this.config.batching.enabled && this.eventQueue) {
-      this.eventQueue.add(event);
-      this.log('Event queued', { event });
-    } else {
-      this.sendSingleEvent(event);
-    }
-  }
+  const state: SdkState = {
+    config: internalConfig,
+    apiClient,
+    sessionId,
+    anonymousId,
+    user: { anonymousId },
+    eventQueue: null,
+    sessionStartTime: Date.now(),
+    pageViewCount: 0,
+    interactionCount: 0,
+    isInitialized: false,
+  };
 
-  /**
-   * Send a single event immediately
-   */
-  private async sendSingleEvent(event: BaseEvent): Promise<void> {
-    const response = await this.apiClient.track({
-      projectId: this.config.projectId,
-      sessionId: this.sessionId,
-      event,
-      user: this.user!,
-    });
+  logDebugMessage(state, 'SDK initialized', { config: internalConfig });
 
-    this.log('Event sent', { event, response });
-  }
+  const sdkInstance: CrowSDK = {
+    initializeSdk: async () => initializeSdkInternal(state),
+    trackEvent: (eventType, data) =>
+      trackEventAndExtendSession(state, eventType, data),
+    trackPageView: data => trackEventAndExtendSession(state, 'pageview', data),
+    trackClick: data => trackEventAndExtendSession(state, 'click', data),
+    identifyUser: (userId, traits) => updateUserIdentity(state, userId, traits),
+    flushQueuedEvents: async () => flushAllQueuedEvents(state),
+    destroySdk: () => destroySdkAndCleanup(state),
+  };
 
-  /**
-   * Send batched events
-   */
-  private async sendBatch(events: BaseEvent[]): Promise<void> {
-    if (events.length === 0) {
-      return;
-    }
+  makeGloballyAvailableForDebugging(sdkInstance);
 
-    const response = await this.apiClient.batch({
-      projectId: this.config.projectId,
-      sessionId: this.sessionId,
-      events,
-      user: this.user!,
-    });
-
-    this.log('Batch sent', { eventCount: events.length, response });
-  }
-
-  /**
-   * Set up auto-capture for page views and clicks
-   */
-  private setupAutoCapture(): void {
-    // Auto-capture page views
-    if (this.config.capture.pageViews) {
-      this.pageView({ autoCapture: true });
-    }
-
-    // Auto-capture clicks
-    if (this.config.capture.clicks) {
-      document.addEventListener('click', event => {
-        const target = event.target as HTMLElement;
-        const data = {
-          tagName: target.tagName,
-          id: target.id || undefined,
-          className: target.className || undefined,
-          text: target.textContent?.substring(0, 100),
-          autoCapture: true,
-        };
-        this.click(data);
-      });
-    }
-
-    // Auto-capture errors
-    if (this.config.capture.errors) {
-      window.addEventListener('error', event => {
-        this.track('error', {
-          message: event.message,
-          filename: event.filename,
-          lineno: event.lineno,
-          colno: event.colno,
-          autoCapture: true,
-        });
-      });
-    }
-  }
-
-  /**
-   * Set up handler for page unload (send remaining events and end session)
-   */
-  private setupPageUnloadHandler(): void {
-    window.addEventListener('beforeunload', () => {
-      // Flush any remaining events
-      if (this.eventQueue) {
-        this.eventQueue.flush();
-      }
-
-      // End session
-      this.endSession();
-    });
-  }
-
-  /**
-   * Get screen size
-   */
-  private getScreenSize(): ScreenSize {
-    return {
-      width: window.innerWidth,
-      height: window.innerHeight,
-    };
-  }
-
-  /**
-   * Log debug messages
-   */
-  private log(message: string, data?: any): void {
-    if (this.config.debug) {
-      console.log(`[Crow] ${message}`, data || '');
-    }
-  }
-
-  /**
-   * Manually flush all queued events
-   */
-  async flush(): Promise<void> {
-    if (this.eventQueue) {
-      await this.eventQueue.flush();
-    }
-  }
-
-  /**
-   * Destroy the SDK instance
-   */
-  destroy(): void {
-    if (this.eventQueue) {
-      this.eventQueue.destroy();
-      this.eventQueue = null;
-    }
-
-    this.endSession();
-    this.isInitialized = false;
-    this.log('SDK destroyed');
-  }
+  return sdkInstance;
 }

@@ -1,38 +1,21 @@
-/**
- * SDK Configuration options
- * Only projectId and debug are user-configurable.
- * All other settings are hardcoded internally.
- */
 export interface CrowConfig {
-  projectId: string; // API key for the project
-  debug?: boolean; // Enable debug logging
+  projectId: string;
+  debug?: boolean;
 }
 
-/**
- * User information
- */
 export interface User {
-  id?: string; // Custom user ID
-  anonymousId: string; // Auto-generated anonymous ID
-  traits?: Record<string, any>; // User attributes
+  id?: string;
+  anonymousId: string;
+  traits?: Record<string, any>;
 }
 
-/**
- * Screen size
- */
 export interface ScreenSize {
   width: number;
   height: number;
 }
 
-/**
- * Event types
- */
 export type EventType = 'pageview' | 'click' | 'form' | 'custom' | 'error';
 
-/**
- * Base event structure
- */
 export interface BaseEvent {
   type: EventType;
   timestamp: number;
@@ -43,9 +26,6 @@ export interface BaseEvent {
   screenSize?: ScreenSize;
 }
 
-/**
- * Context for session
- */
 export interface SessionContext {
   url: string;
   referrer?: string;
@@ -55,9 +35,6 @@ export interface SessionContext {
   locale: string;
 }
 
-/**
- * API Request/Response types
- */
 export interface TrackRequest {
   projectId: string;
   sessionId: string;

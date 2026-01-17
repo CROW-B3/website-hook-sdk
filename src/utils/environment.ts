@@ -1,38 +1,26 @@
-/**
- * Shared utility functions used across multiple modules
- */
-
-/**
- * Check if code is running in browser environment
- */
 export function isBrowserEnvironment(): boolean {
   return typeof window !== 'undefined' && typeof document !== 'undefined';
 }
 
-/**
- * Extract site information from current URL
- */
-export function getSiteInfo() {
+export function extractSiteInfoFromUrl() {
   const hostname = window.location.hostname;
-  const siteName = hostname.replace(/^www\./, '').split('.')[0];
+  const siteNameWithoutWww = hostname.replace(/^www\./, '');
+  const siteName = siteNameWithoutWww.split('.')[0];
   return { hostname, siteName };
 }
 
-/**
- * Get environment variable safely
- */
-export function getEnvVar(key: string): string | undefined {
-  // @ts-ignore - process.env may not exist in all environments
-  if (typeof process !== 'undefined' && typeof process.env !== 'undefined') {
-    // @ts-ignore
-    return process.env[key];
-  }
-  return undefined;
+type ProcessEnvironment = {
+  env?: Record<string, string | undefined>;
+};
+
+export function getEnvironmentVariable(key: string): string | undefined {
+  const globalProcess = globalThis.process as ProcessEnvironment | undefined;
+
+  if (!globalProcess?.env) return undefined;
+
+  return globalProcess.env[key];
 }
 
-/**
- * Get current environment name
- */
-export function getEnvironment(): string {
-  return getEnvVar('NODE_ENV') || 'production';
+export function getCurrentEnvironmentName(): string {
+  return getEnvironmentVariable('NODE_ENV') || 'production';
 }
