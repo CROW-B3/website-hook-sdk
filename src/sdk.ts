@@ -4,16 +4,11 @@ import type {
   EventType,
   ScreenSize,
   SessionContext,
-  User,
 } from './types';
 import type { ApiClient } from './api/client';
 import type { EventQueue } from './utils/queue';
 import { createApiClient } from './api/client';
-import {
-  extendCurrentSessionExpiry,
-  getOrCreateAnonymousId,
-  getOrCreateSessionId,
-} from './utils/id';
+import { extendCurrentSessionExpiry, getOrCreateSessionId } from './utils/id';
 import { createEventQueue } from './utils/queue';
 import { isBrowserEnvironment } from './utils/environment';
 import { NEXT_BASE_URL } from './constants';
@@ -50,8 +45,6 @@ type SdkState = {
   config: InternalConfig;
   apiClient: ApiClient;
   sessionId: string;
-  anonymousId: string;
-  user: User;
   eventQueue: EventQueue | null;
   sessionStartTime: number;
   pageViewCount: number;
@@ -113,7 +106,6 @@ async function sendSessionStartRequest(state: SdkState): Promise<void> {
   const response = await state.apiClient.startNewSession({
     projectId: state.config.projectId,
     sessionId: state.sessionId,
-    user: state.user,
     context: sessionContext,
   });
 
@@ -166,7 +158,6 @@ async function sendSingleEventToApi(
     projectId: state.config.projectId,
     sessionId: state.sessionId,
     event,
-    user: state.user,
   });
 
   logDebugMessage(state, 'Event sent', { event, response });
@@ -182,7 +173,6 @@ async function sendBatchedEventsToApi(
     projectId: state.config.projectId,
     sessionId: state.sessionId,
     events,
-    user: state.user,
   });
 
   logDebugMessage(state, 'Batch sent', { eventCount: events.length, response });
@@ -322,12 +312,6 @@ function updateUserIdentity(
   userId: string,
   traits?: Record<string, any>
 ): void {
-  state.user = {
-    id: userId,
-    anonymousId: state.anonymousId,
-    traits,
-  };
-
   logDebugMessage(state, 'User identified', { userId, traits });
 }
 
@@ -361,14 +345,11 @@ export function createCrowSDK(userConfig: CrowConfig): CrowSDK {
   const internalConfig = buildInternalConfig(userConfig);
   const apiClient = createApiClient(internalConfig.apiEndpoint);
   const sessionId = getOrCreateSessionId();
-  const anonymousId = getOrCreateAnonymousId();
 
   const state: SdkState = {
     config: internalConfig,
     apiClient,
     sessionId,
-    anonymousId,
-    user: { anonymousId },
     eventQueue: null,
     sessionStartTime: Date.now(),
     pageViewCount: 0,

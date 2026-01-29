@@ -5,7 +5,6 @@ export interface CrowConfig {
 
 export interface User {
   id?: string;
-  anonymousId: string;
   traits?: Record<string, any>;
 }
 
@@ -52,7 +51,6 @@ export interface BatchRequest {
 export interface SessionStartRequest {
   projectId: string;
   sessionId: string;
-  user: User;
   context: SessionContext;
 }
 
