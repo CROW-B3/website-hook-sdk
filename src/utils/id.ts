@@ -1,7 +1,4 @@
-const THIRTY_MINUTES_IN_MS = 30 * 60 * 1000;
-const ANONYMOUS_ID_STORAGE_KEY = 'crow_anonymous_id';
 const SESSION_ID_STORAGE_KEY = 'crow_session_id';
-const SESSION_EXPIRY_STORAGE_KEY = 'crow_session_expiry';
 
 export function generateUniqueIdWithPrefix(prefix: string): string {
   const timestampBase36 = Date.now().toString(36);
@@ -25,64 +22,12 @@ function trySetItemInLocalStorage(key: string, value: string): void {
   }
 }
 
-export function getOrCreateAnonymousId(): string {
-  const existingAnonymousId = tryGetItemFromLocalStorage(
-    ANONYMOUS_ID_STORAGE_KEY
-  );
-  if (existingAnonymousId) return existingAnonymousId;
-
-  const newAnonymousId = generateUniqueIdWithPrefix('anon');
-  trySetItemInLocalStorage(ANONYMOUS_ID_STORAGE_KEY, newAnonymousId);
-  return newAnonymousId;
-}
-
-function tryGetItemFromSessionStorage(key: string): string | null {
-  try {
-    return sessionStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function trySetItemInSessionStorage(key: string, value: string): void {
-  try {
-    sessionStorage.setItem(key, value);
-  } catch {
-    return;
-  }
-}
-
-function isSessionStillValid(expiryTimestamp: string | null): boolean {
-  if (!expiryTimestamp) return false;
-  return Date.now() < Number.parseInt(expiryTimestamp);
-}
-
-function calculateSessionExpiryTimestamp(): string {
-  return (Date.now() + THIRTY_MINUTES_IN_MS).toString();
-}
-
 export function getOrCreateSessionId(): string {
-  const existingSessionId = tryGetItemFromSessionStorage(
-    SESSION_ID_STORAGE_KEY
-  );
-  const sessionExpiry = tryGetItemFromSessionStorage(
-    SESSION_EXPIRY_STORAGE_KEY
-  );
-
-  if (existingSessionId && isSessionStillValid(sessionExpiry)) {
-    return existingSessionId;
-  }
+  const existingSessionId = tryGetItemFromLocalStorage(SESSION_ID_STORAGE_KEY);
+  if (existingSessionId) return existingSessionId;
 
   const newSessionId = generateUniqueIdWithPrefix('sess');
-  const newExpiryTimestamp = calculateSessionExpiryTimestamp();
-
-  trySetItemInSessionStorage(SESSION_ID_STORAGE_KEY, newSessionId);
-  trySetItemInSessionStorage(SESSION_EXPIRY_STORAGE_KEY, newExpiryTimestamp);
+  trySetItemInLocalStorage(SESSION_ID_STORAGE_KEY, newSessionId);
 
   return newSessionId;
-}
-
-export function extendCurrentSessionExpiry(): void {
-  const newExpiryTimestamp = calculateSessionExpiryTimestamp();
-  trySetItemInSessionStorage(SESSION_EXPIRY_STORAGE_KEY, newExpiryTimestamp);
 }

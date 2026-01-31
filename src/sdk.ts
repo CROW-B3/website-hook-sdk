@@ -1,19 +1,8 @@
-import type {
-  BaseEvent,
-  CrowConfig,
-  EventType,
-  ScreenSize,
-  SessionContext,
-  User,
-} from './types';
+import type { BaseEvent, CrowConfig, EventType, ScreenSize } from './types';
 import type { ApiClient } from './api/client';
 import type { EventQueue } from './utils/queue';
 import { createApiClient } from './api/client';
-import {
-  extendCurrentSessionExpiry,
-  getOrCreateAnonymousId,
-  getOrCreateSessionId,
-} from './utils/id';
+import { getOrCreateSessionId } from './utils/id';
 import { createEventQueue } from './utils/queue';
 import { isBrowserEnvironment } from './utils/environment';
 import { NEXT_BASE_URL } from './constants';
@@ -31,7 +20,6 @@ const DEFAULT_BATCHING_CONFIG = {
 } as const;
 
 type InternalConfig = {
-  projectId: string;
   apiEndpoint: string;
   capture: {
     pageViews: boolean;
@@ -50,12 +38,7 @@ type SdkState = {
   config: InternalConfig;
   apiClient: ApiClient;
   sessionId: string;
-  anonymousId: string;
-  user: User;
   eventQueue: EventQueue | null;
-  sessionStartTime: number;
-  pageViewCount: number;
-  interactionCount: number;
   isInitialized: boolean;
 };
 
@@ -64,7 +47,6 @@ export type CrowSDK = {
   trackEvent: (eventType: EventType, data?: Record<string, any>) => void;
   trackPageView: (data?: Record<string, any>) => void;
   trackClick: (data?: Record<string, any>) => void;
-  identifyUser: (userId: string, traits?: Record<string, any>) => void;
   flushQueuedEvents: () => Promise<void>;
   destroySdk: () => void;
 };
@@ -76,7 +58,6 @@ function throwIfNotBrowserEnvironment(): void {
 
 function buildInternalConfig(userConfig: CrowConfig): InternalConfig {
   return {
-    projectId: userConfig.projectId,
     apiEndpoint: NEXT_BASE_URL,
     capture: DEFAULT_CAPTURE_CONFIG,
     batching: DEFAULT_BATCHING_CONFIG,
@@ -94,53 +75,6 @@ function getCurrentScreenSize(): ScreenSize {
     width: window.innerWidth,
     height: window.innerHeight,
   };
-}
-
-function buildSessionContext(): SessionContext {
-  return {
-    url: window.location.href,
-    referrer: document.referrer,
-    userAgent: navigator.userAgent,
-    screenSize: getCurrentScreenSize(),
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    locale: navigator.language,
-  };
-}
-
-async function sendSessionStartRequest(state: SdkState): Promise<void> {
-  const sessionContext = buildSessionContext();
-
-  const response = await state.apiClient.startNewSession({
-    projectId: state.config.projectId,
-    sessionId: state.sessionId,
-    user: state.user,
-    context: sessionContext,
-  });
-
-  logDebugMessage(state, 'Session started', { response });
-}
-
-function calculateSessionDuration(state: SdkState): number {
-  return Date.now() - state.sessionStartTime;
-}
-
-async function sendSessionEndRequest(state: SdkState): Promise<void> {
-  const sessionDuration = calculateSessionDuration(state);
-
-  const response = await state.apiClient.endCurrentSession({
-    projectId: state.config.projectId,
-    sessionId: state.sessionId,
-    duration: sessionDuration,
-    pageViews: state.pageViewCount,
-    interactions: state.interactionCount,
-  });
-
-  logDebugMessage(state, 'Session ended', {
-    response,
-    duration: sessionDuration,
-    pageViews: state.pageViewCount,
-    interactions: state.interactionCount,
-  });
 }
 
 function buildBaseEvent(
@@ -163,10 +97,8 @@ async function sendSingleEventToApi(
   event: BaseEvent
 ): Promise<void> {
   const response = await state.apiClient.sendTrackingEvent({
-    projectId: state.config.projectId,
     sessionId: state.sessionId,
     event,
-    user: state.user,
   });
 
   logDebugMessage(state, 'Event sent', { event, response });
@@ -179,10 +111,8 @@ async function sendBatchedEventsToApi(
   if (events.length === 0) return;
 
   const response = await state.apiClient.sendBatchedEvents({
-    projectId: state.config.projectId,
     sessionId: state.sessionId,
     events,
-    user: state.user,
   });
 
   logDebugMessage(state, 'Batch sent', { eventCount: events.length, response });
@@ -198,32 +128,13 @@ function queueOrSendEventImmediately(state: SdkState, event: BaseEvent): void {
   sendSingleEventToApi(state, event);
 }
 
-function incrementPageViewCounter(state: SdkState): void {
-  state.pageViewCount++;
-}
-
-function incrementInteractionCounter(state: SdkState): void {
-  state.interactionCount++;
-}
-
-function updateEventCounters(state: SdkState, eventType: EventType): void {
-  if (eventType === 'pageview') {
-    incrementPageViewCounter(state);
-    return;
-  }
-
-  incrementInteractionCounter(state);
-}
-
-function trackEventAndExtendSession(
+function trackEvent(
   state: SdkState,
   eventType: EventType,
   data?: Record<string, any>
 ): void {
   const event = buildBaseEvent(eventType, data);
   queueOrSendEventImmediately(state, event);
-  updateEventCounters(state, eventType);
-  extendCurrentSessionExpiry();
 }
 
 function extractClickDataFromEvent(
@@ -244,7 +155,7 @@ function setupClickAutoCapture(state: SdkState): void {
 
   document.addEventListener('click', clickEvent => {
     const clickData = extractClickDataFromEvent(clickEvent);
-    trackEventAndExtendSession(state, 'click', clickData);
+    trackEvent(state, 'click', clickData);
   });
 }
 
@@ -265,13 +176,13 @@ function setupErrorAutoCapture(state: SdkState): void {
 
   window.addEventListener('error', errorEvent => {
     const errorData = extractErrorDataFromEvent(errorEvent);
-    trackEventAndExtendSession(state, 'error', errorData);
+    trackEvent(state, 'error', errorData);
   });
 }
 
 function setupPageViewAutoCapture(state: SdkState): void {
   if (!state.config.capture.pageViews) return;
-  trackEventAndExtendSession(state, 'pageview', { autoCapture: true });
+  trackEvent(state, 'pageview', { autoCapture: true });
 }
 
 function setupAllAutoCapture(state: SdkState): void {
@@ -288,7 +199,6 @@ function flushQueueIfExists(state: SdkState): void {
 function setupPageUnloadHandler(state: SdkState): void {
   window.addEventListener('beforeunload', () => {
     flushQueueIfExists(state);
-    sendSessionEndRequest(state);
   });
 }
 
@@ -308,27 +218,12 @@ async function initializeSdkInternal(state: SdkState): Promise<void> {
     return;
   }
 
-  await sendSessionStartRequest(state);
   createEventQueueIfBatchingEnabled(state);
   setupAllAutoCapture(state);
   setupPageUnloadHandler(state);
 
   state.isInitialized = true;
   logDebugMessage(state, 'SDK initialization complete');
-}
-
-function updateUserIdentity(
-  state: SdkState,
-  userId: string,
-  traits?: Record<string, any>
-): void {
-  state.user = {
-    id: userId,
-    anonymousId: state.anonymousId,
-    traits,
-  };
-
-  logDebugMessage(state, 'User identified', { userId, traits });
 }
 
 async function flushAllQueuedEvents(state: SdkState): Promise<void> {
@@ -345,7 +240,6 @@ function destroyEventQueueIfExists(state: SdkState): void {
 
 function destroySdkAndCleanup(state: SdkState): void {
   destroyEventQueueIfExists(state);
-  sendSessionEndRequest(state);
   state.isInitialized = false;
   logDebugMessage(state, 'SDK destroyed');
 }
@@ -361,30 +255,25 @@ export function createCrowSDK(userConfig: CrowConfig): CrowSDK {
   const internalConfig = buildInternalConfig(userConfig);
   const apiClient = createApiClient(internalConfig.apiEndpoint);
   const sessionId = getOrCreateSessionId();
-  const anonymousId = getOrCreateAnonymousId();
 
   const state: SdkState = {
     config: internalConfig,
     apiClient,
     sessionId,
-    anonymousId,
-    user: { anonymousId },
     eventQueue: null,
-    sessionStartTime: Date.now(),
-    pageViewCount: 0,
-    interactionCount: 0,
     isInitialized: false,
   };
 
-  logDebugMessage(state, 'SDK initialized', { config: internalConfig });
+  logDebugMessage(state, 'SDK initialized', {
+    config: internalConfig,
+    sessionId,
+  });
 
   const sdkInstance: CrowSDK = {
     initializeSdk: async () => initializeSdkInternal(state),
-    trackEvent: (eventType, data) =>
-      trackEventAndExtendSession(state, eventType, data),
-    trackPageView: data => trackEventAndExtendSession(state, 'pageview', data),
-    trackClick: data => trackEventAndExtendSession(state, 'click', data),
-    identifyUser: (userId, traits) => updateUserIdentity(state, userId, traits),
+    trackEvent: (eventType, data) => trackEvent(state, eventType, data),
+    trackPageView: data => trackEvent(state, 'pageview', data),
+    trackClick: data => trackEvent(state, 'click', data),
     flushQueuedEvents: async () => flushAllQueuedEvents(state),
     destroySdk: () => destroySdkAndCleanup(state),
   };

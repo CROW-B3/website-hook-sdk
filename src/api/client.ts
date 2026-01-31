@@ -3,9 +3,6 @@ import type {
   ApiResponse,
   BatchRequest,
   BatchResponse,
-  SessionEndRequest,
-  SessionResponse,
-  SessionStartRequest,
   TrackRequest,
 } from '../types';
 
@@ -16,8 +13,6 @@ const MAX_RETRY_ATTEMPTS = 3;
 export type ApiClient = {
   sendTrackingEvent: (data: TrackRequest) => Promise<ApiResponse>;
   sendBatchedEvents: (data: BatchRequest) => Promise<BatchResponse>;
-  startNewSession: (data: SessionStartRequest) => Promise<SessionResponse>;
-  endCurrentSession: (data: SessionEndRequest) => Promise<ApiResponse>;
 };
 
 function createHttpClient(baseUrl: string) {
@@ -62,36 +57,6 @@ async function sendBatchRequest(
   }
 }
 
-async function sendSessionStartRequest(
-  httpClient: ReturnType<typeof ky.create>,
-  sessionData: SessionStartRequest
-): Promise<SessionResponse> {
-  try {
-    return await httpClient
-      .post('session/start', { json: sessionData })
-      .json<SessionResponse>();
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Failed to start session: ${errorMessage}`);
-  }
-}
-
-async function sendSessionEndRequest(
-  httpClient: ReturnType<typeof ky.create>,
-  sessionEndData: SessionEndRequest
-): Promise<ApiResponse> {
-  try {
-    return await httpClient
-      .post('session/end', { json: sessionEndData })
-      .json<ApiResponse>();
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Failed to end session: ${errorMessage}`);
-  }
-}
-
 export function createApiClient(baseUrl: string): ApiClient {
   const httpClient = createHttpClient(baseUrl);
 
@@ -100,9 +65,5 @@ export function createApiClient(baseUrl: string): ApiClient {
       sendTrackRequest(httpClient, data),
     sendBatchedEvents: async (data: BatchRequest) =>
       sendBatchRequest(httpClient, data),
-    startNewSession: async (data: SessionStartRequest) =>
-      sendSessionStartRequest(httpClient, data),
-    endCurrentSession: async (data: SessionEndRequest) =>
-      sendSessionEndRequest(httpClient, data),
   };
 }
