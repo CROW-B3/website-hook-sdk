@@ -1,6 +1,7 @@
 import type { BaseEvent, CrowConfig, EventType, ScreenSize } from './types';
 import type { ApiClient } from './api/client';
 import type { EventQueue } from './utils/queue';
+import type { SessionData } from './utils/id';
 import { createApiClient } from './api/client';
 import { getOrCreateSessionId } from './utils/id';
 import { createEventQueue } from './utils/queue';
@@ -37,7 +38,8 @@ type InternalConfig = {
 type SdkState = {
   config: InternalConfig;
   apiClient: ApiClient;
-  sessionId: string;
+  sessionData: SessionData;
+  apiKey: string;
   eventQueue: EventQueue | null;
   isInitialized: boolean;
 };
@@ -97,8 +99,9 @@ async function sendSingleEventToApi(
   event: BaseEvent
 ): Promise<void> {
   const response = await state.apiClient.sendTrackingEvent({
-    sessionId: state.sessionId,
+    sessionId: state.sessionData.sessionId,
     event,
+    apiKey: state.apiKey,
   });
 
   logDebugMessage(state, 'Event sent', { event, response });
@@ -111,8 +114,9 @@ async function sendBatchedEventsToApi(
   if (events.length === 0) return;
 
   const response = await state.apiClient.sendBatchedEvents({
-    sessionId: state.sessionId,
+    sessionId: state.sessionData.sessionId,
     events,
+    apiKey: state.apiKey,
   });
 
   logDebugMessage(state, 'Batch sent', { eventCount: events.length, response });
@@ -254,19 +258,20 @@ export function createCrowSDK(userConfig: CrowConfig): CrowSDK {
 
   const internalConfig = buildInternalConfig(userConfig);
   const apiClient = createApiClient(internalConfig.apiEndpoint);
-  const sessionId = getOrCreateSessionId();
+  const sessionData = getOrCreateSessionId();
 
   const state: SdkState = {
     config: internalConfig,
     apiClient,
-    sessionId,
+    sessionData,
+    apiKey: userConfig.apiKey,
     eventQueue: null,
     isInitialized: false,
   };
 
   logDebugMessage(state, 'SDK initialized', {
     config: internalConfig,
-    sessionId,
+    sessionData,
   });
 
   const sdkInstance: CrowSDK = {

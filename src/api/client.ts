@@ -33,7 +33,12 @@ async function sendTrackRequest(
 ): Promise<ApiResponse> {
   try {
     return await httpClient
-      .post('track', { json: trackData })
+      .post('track', {
+        json: trackData,
+        headers: {
+          Authorization: `Bearer ${trackData.apiKey}`,
+        },
+      })
       .json<ApiResponse>();
   } catch (error) {
     const errorMessage =
@@ -48,7 +53,12 @@ async function sendBatchRequest(
 ): Promise<BatchResponse> {
   try {
     return await httpClient
-      .post('batch', { json: batchData })
+      .post('batch', {
+        json: batchData,
+        headers: {
+          Authorization: `Bearer ${batchData.apiKey}`,
+        },
+      })
       .json<BatchResponse>();
   } catch (error) {
     const errorMessage =

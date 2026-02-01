@@ -1,4 +1,5 @@
 export interface CrowConfig {
+  apiKey: string;
   debug?: boolean;
 }
 
@@ -22,11 +23,13 @@ export interface BaseEvent {
 export interface TrackRequest {
   sessionId: string;
   event: BaseEvent;
+  apiKey: string;
 }
 
 export interface BatchRequest {
   sessionId: string;
   events: BaseEvent[];
+  apiKey: string;
 }
 
 export interface ApiResponse {
