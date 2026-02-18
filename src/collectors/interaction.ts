@@ -119,7 +119,7 @@ function getNearestHeading(element: HTMLElement): string | undefined {
 
     // Check if parent contains a heading as first child
     if (current.parentElement) {
-      const heading = current.parentElement.querySelector('h1, h2, h3, h4, h5, h6');
+      const heading: Element | null = current.parentElement.querySelector('h1, h2, h3, h4, h5, h6');
       if (heading && heading !== current) {
         return heading.textContent?.trim().substring(0, 200) || undefined;
       }
