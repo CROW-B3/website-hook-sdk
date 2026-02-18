@@ -1,13 +1,21 @@
 import type {
   BaseEvent,
+  CaptureConfig,
   CrowConfig,
   EventType,
+  ProductSnapshot,
   ScreenSize,
   SessionContext,
   User,
 } from './types';
 import type { ApiClient } from './api/client';
 import type { EventQueue } from './utils/queue';
+import type { Collector, CollectorContext } from './collectors/types';
+import type {
+  AddToCartData,
+  ImageZoomData,
+  VariantSelectData,
+} from './collectors/ecommerce';
 import { createApiClient } from './api/client';
 import {
   extendCurrentSessionExpiry,
@@ -17,12 +25,33 @@ import {
 import { createEventQueue } from './utils/queue';
 import { isBrowserEnvironment } from './utils/environment';
 import { NEXT_BASE_URL } from './constants';
+import { createNavigationCollector } from './collectors/navigation';
+import { createEngagementCollector } from './collectors/engagement';
+import { createInteractionCollector } from './collectors/interaction';
+import {
+  createEcommerceCollector,
+  trackAddToCart as ecommerceTrackAddToCart,
+  trackVariantSelect as ecommerceTrackVariantSelect,
+  trackImageZoom as ecommerceTrackImageZoom,
+} from './collectors/ecommerce';
+import {
+  createContextSnapshotCollector,
+  captureProductSnapshot as contextCaptureSnapshot,
+} from './collectors/context-snapshot';
+import { createPerformanceCollector } from './collectors/performance';
+import { createErrorCollector } from './collectors/error';
+import { createReplayCollector } from './collectors/replay';
 
-const DEFAULT_CAPTURE_CONFIG = {
+const DEFAULT_CAPTURE_CONFIG: CaptureConfig = {
   pageViews: true,
   clicks: true,
   errors: true,
-} as const;
+  navigation: true,
+  engagement: true,
+  interactions: true,
+  performance: true,
+  replay: true,
+};
 
 const DEFAULT_BATCHING_CONFIG = {
   enabled: true,
@@ -33,11 +62,7 @@ const DEFAULT_BATCHING_CONFIG = {
 type InternalConfig = {
   projectId: string;
   apiEndpoint: string;
-  capture: {
-    pageViews: boolean;
-    clicks: boolean;
-    errors: boolean;
-  };
+  capture: CaptureConfig;
   batching: {
     enabled: boolean;
     maxBatchSize: number;
@@ -57,6 +82,7 @@ type SdkState = {
   pageViewCount: number;
   interactionCount: number;
   isInitialized: boolean;
+  collectors: Collector[];
 };
 
 export type CrowSDK = {
@@ -67,6 +93,10 @@ export type CrowSDK = {
   identifyUser: (userId: string, traits?: Record<string, any>) => void;
   flushQueuedEvents: () => Promise<void>;
   destroySdk: () => void;
+  trackAddToCart: (data: AddToCartData) => void;
+  trackVariantSelect: (data: VariantSelectData) => void;
+  trackImageZoom: (data: ImageZoomData) => void;
+  captureProductSnapshot: (snapshot: ProductSnapshot) => void;
 };
 
 function throwIfNotBrowserEnvironment(): void {
@@ -78,7 +108,10 @@ function buildInternalConfig(userConfig: CrowConfig): InternalConfig {
   return {
     projectId: userConfig.projectId,
     apiEndpoint: NEXT_BASE_URL,
-    capture: DEFAULT_CAPTURE_CONFIG,
+    capture: {
+      ...DEFAULT_CAPTURE_CONFIG,
+      ...userConfig.capture,
+    },
     batching: DEFAULT_BATCHING_CONFIG,
     debug: userConfig.debug ?? false,
   };
@@ -152,7 +185,15 @@ function buildBaseEvent(
     timestamp: Date.now(),
     url: window.location.href,
     referrer: document.referrer,
-    data: eventData,
+    data: {
+      ...eventData,
+      pageTitle: document.title,
+      scrollPosition: {
+        x: window.scrollX,
+        y: window.scrollY,
+      },
+      documentHeight: document.documentElement.scrollHeight,
+    },
     userAgent: navigator.userAgent,
     screenSize: getCurrentScreenSize(),
   };
@@ -226,58 +267,76 @@ function trackEventAndExtendSession(
   extendCurrentSessionExpiry();
 }
 
-function extractClickDataFromEvent(
-  clickEvent: MouseEvent
-): Record<string, any> {
-  const targetElement = clickEvent.target as HTMLElement;
+function registerCollectors(state: SdkState): void {
+  const { capture } = state.config;
+
+  // Always register ecommerce and context-snapshot (they're API-driven, not auto-capture)
+  state.collectors.push(createEcommerceCollector());
+  state.collectors.push(createContextSnapshotCollector());
+
+  if (capture.errors) {
+    state.collectors.push(createErrorCollector());
+  }
+
+  if (capture.navigation) {
+    state.collectors.push(createNavigationCollector());
+  }
+
+  if (capture.engagement) {
+    state.collectors.push(createEngagementCollector());
+  }
+
+  if (capture.interactions) {
+    state.collectors.push(createInteractionCollector());
+  }
+
+  if (capture.performance) {
+    state.collectors.push(createPerformanceCollector());
+  }
+
+  if (capture.replay) {
+    state.collectors.push(createReplayCollector());
+  }
+}
+
+function buildCollectorContext(state: SdkState): CollectorContext {
   return {
-    tagName: targetElement.tagName,
-    id: targetElement.id || undefined,
-    className: targetElement.className || undefined,
-    text: targetElement.textContent?.substring(0, 100),
-    autoCapture: true,
+    trackEvent: (eventType: EventType, data?: Record<string, any>) =>
+      trackEventAndExtendSession(state, eventType, data),
+    config: state.config.capture,
+    sessionId: state.sessionId,
+    projectId: state.config.projectId,
+    apiClient: state.apiClient,
+    debug: (message: string, data?: any) => logDebugMessage(state, message, data),
   };
 }
 
-function setupClickAutoCapture(state: SdkState): void {
-  if (!state.config.capture.clicks) return;
-
-  document.addEventListener('click', clickEvent => {
-    const clickData = extractClickDataFromEvent(clickEvent);
-    trackEventAndExtendSession(state, 'click', clickData);
-  });
+function initializeAllCollectors(state: SdkState): void {
+  const context = buildCollectorContext(state);
+  for (const collector of state.collectors) {
+    try {
+      collector.initialize(context);
+      logDebugMessage(state, `Collector "${collector.name}" initialized`);
+    } catch (error) {
+      console.error(`[Crow] Failed to initialize collector "${collector.name}":`, error);
+    }
+  }
 }
 
-function extractErrorDataFromEvent(
-  errorEvent: ErrorEvent
-): Record<string, any> {
-  return {
-    message: errorEvent.message,
-    filename: errorEvent.filename,
-    lineno: errorEvent.lineno,
-    colno: errorEvent.colno,
-    autoCapture: true,
-  };
-}
-
-function setupErrorAutoCapture(state: SdkState): void {
-  if (!state.config.capture.errors) return;
-
-  window.addEventListener('error', errorEvent => {
-    const errorData = extractErrorDataFromEvent(errorEvent);
-    trackEventAndExtendSession(state, 'error', errorData);
-  });
+function destroyAllCollectors(state: SdkState): void {
+  for (const collector of state.collectors) {
+    try {
+      collector.destroy();
+    } catch (error) {
+      console.error(`[Crow] Failed to destroy collector "${collector.name}":`, error);
+    }
+  }
+  state.collectors = [];
 }
 
 function setupPageViewAutoCapture(state: SdkState): void {
   if (!state.config.capture.pageViews) return;
   trackEventAndExtendSession(state, 'pageview', { autoCapture: true });
-}
-
-function setupAllAutoCapture(state: SdkState): void {
-  setupPageViewAutoCapture(state);
-  setupClickAutoCapture(state);
-  setupErrorAutoCapture(state);
 }
 
 function flushQueueIfExists(state: SdkState): void {
@@ -310,7 +369,13 @@ async function initializeSdkInternal(state: SdkState): Promise<void> {
 
   await sendSessionStartRequest(state);
   createEventQueueIfBatchingEnabled(state);
-  setupAllAutoCapture(state);
+
+  // Register and initialize collectors (handles clicks, errors, etc.)
+  registerCollectors(state);
+  initializeAllCollectors(state);
+
+  // Auto-capture initial pageview
+  setupPageViewAutoCapture(state);
   setupPageUnloadHandler(state);
 
   state.isInitialized = true;
@@ -344,6 +409,7 @@ function destroyEventQueueIfExists(state: SdkState): void {
 }
 
 function destroySdkAndCleanup(state: SdkState): void {
+  destroyAllCollectors(state);
   destroyEventQueueIfExists(state);
   sendSessionEndRequest(state);
   state.isInitialized = false;
@@ -374,6 +440,7 @@ export function createCrowSDK(userConfig: CrowConfig): CrowSDK {
     pageViewCount: 0,
     interactionCount: 0,
     isInitialized: false,
+    collectors: [],
   };
 
   logDebugMessage(state, 'SDK initialized', { config: internalConfig });
@@ -387,6 +454,10 @@ export function createCrowSDK(userConfig: CrowConfig): CrowSDK {
     identifyUser: (userId, traits) => updateUserIdentity(state, userId, traits),
     flushQueuedEvents: async () => flushAllQueuedEvents(state),
     destroySdk: () => destroySdkAndCleanup(state),
+    trackAddToCart: data => ecommerceTrackAddToCart(data),
+    trackVariantSelect: data => ecommerceTrackVariantSelect(data),
+    trackImageZoom: data => ecommerceTrackImageZoom(data),
+    captureProductSnapshot: snapshot => contextCaptureSnapshot(snapshot),
   };
 
   makeGloballyAvailableForDebugging(sdkInstance);

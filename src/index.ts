@@ -4,6 +4,8 @@ import type { CrowConfig } from './types';
 
 export type { CrowSDK };
 export type * from './types';
+export type { AddToCartData, VariantSelectData, ImageZoomData } from './collectors/ecommerce';
+export type { Collector, CollectorContext } from './collectors/types';
 export { createCrowSDK };
 
 let globalSdkInstance: CrowSDK | null = null;

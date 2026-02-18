@@ -1,6 +1,18 @@
 export interface CrowConfig {
   projectId: string;
   debug?: boolean;
+  capture?: Partial<CaptureConfig>;
+}
+
+export interface CaptureConfig {
+  pageViews: boolean;
+  clicks: boolean;
+  errors: boolean;
+  navigation: boolean;
+  engagement: boolean;
+  interactions: boolean;
+  performance: boolean;
+  replay: boolean;
 }
 
 export interface User {
@@ -14,7 +26,26 @@ export interface ScreenSize {
   height: number;
 }
 
-export type EventType = 'pageview' | 'click' | 'form' | 'custom' | 'error';
+export type EventType =
+  | 'pageview'
+  | 'click'
+  | 'form'
+  | 'custom'
+  | 'error'
+  | 'navigation'
+  | 'engagement'
+  | 'scroll'
+  | 'visibility'
+  | 'rage_click'
+  | 'hover'
+  | 'form_focus'
+  | 'add_to_cart'
+  | 'variant_select'
+  | 'image_zoom'
+  | 'context_snapshot'
+  | 'performance'
+  | 'web_vital'
+  | 'api_error';
 
 export interface BaseEvent {
   type: EventType;
@@ -33,6 +64,37 @@ export interface SessionContext {
   screenSize: ScreenSize;
   timezone: string;
   locale: string;
+}
+
+export interface UtmParameters {
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_term?: string;
+  utm_content?: string;
+}
+
+export interface ProductSnapshot {
+  productId: string;
+  price?: number;
+  availability?: string;
+  shippingEstimate?: string;
+  variants?: Record<string, any>[];
+  promotions?: string[];
+  outOfStock?: boolean;
+}
+
+export interface ReplayBatchRequest {
+  projectId: string;
+  sessionId: string;
+  chunkIndex: number;
+  events: any[];
+  timestamp: number;
+}
+
+export interface ReplayBatchResponse {
+  success: boolean;
+  chunkId?: string;
 }
 
 export interface TrackRequest {
