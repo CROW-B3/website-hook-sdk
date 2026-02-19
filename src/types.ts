@@ -13,6 +13,7 @@ export interface CaptureConfig {
   interactions: boolean;
   performance: boolean;
   replay: boolean;
+  autoContext: boolean;
 }
 
 export interface User {
@@ -118,12 +119,29 @@ export interface SessionStartRequest {
   context: SessionContext;
 }
 
+export type ExitTriggerType = 'tab_close' | 'navigation_away' | 'idle_timeout';
+
+export interface ExitContext {
+  lastPageUrl: string;
+  lastPageTitle: string;
+  lastPageTimeSpentMs: number;
+  exitTrigger: ExitTriggerType;
+  hadCartItems: boolean;
+  lastInteractions: Array<{
+    type: string;
+    timestamp: number;
+    description: string;
+  }>;
+  totalSessionDurationMs: number;
+}
+
 export interface SessionEndRequest {
   projectId: string;
   sessionId: string;
   duration: number;
   pageViews: number;
   interactions: number;
+  exitContext?: ExitContext;
 }
 
 export interface ApiResponse {

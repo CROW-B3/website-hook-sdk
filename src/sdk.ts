@@ -3,6 +3,8 @@ import type {
   CaptureConfig,
   CrowConfig,
   EventType,
+  ExitContext,
+  ExitTriggerType,
   ProductSnapshot,
   ScreenSize,
   SessionContext,
@@ -41,6 +43,7 @@ import {
 import { createPerformanceCollector } from './collectors/performance';
 import { createErrorCollector } from './collectors/error';
 import { createReplayCollector } from './collectors/replay';
+import { createAutoContextCollector } from './collectors/auto-context';
 
 const DEFAULT_CAPTURE_CONFIG: CaptureConfig = {
   pageViews: true,
@@ -51,6 +54,7 @@ const DEFAULT_CAPTURE_CONFIG: CaptureConfig = {
   interactions: true,
   performance: true,
   replay: true,
+  autoContext: true,
 };
 
 const DEFAULT_BATCHING_CONFIG = {
@@ -71,6 +75,15 @@ type InternalConfig = {
   debug: boolean;
 };
 
+const MAX_RECENT_INTERACTIONS = 10;
+
+interface RecentInteraction {
+  type: string;
+  timestamp: number;
+  url: string;
+  description: string;
+}
+
 type SdkState = {
   config: InternalConfig;
   apiClient: ApiClient;
@@ -83,6 +96,11 @@ type SdkState = {
   interactionCount: number;
   isInitialized: boolean;
   collectors: Collector[];
+  lastPageUrl: string;
+  lastPageTitle: string;
+  lastPageEntryTime: number;
+  hadCartItems: boolean;
+  recentInteractions: RecentInteraction[];
 };
 
 export type CrowSDK = {
@@ -157,8 +175,93 @@ function calculateSessionDuration(state: SdkState): number {
   return Date.now() - state.sessionStartTime;
 }
 
-async function sendSessionEndRequest(state: SdkState): Promise<void> {
+function buildInteractionDescription(
+  eventType: EventType,
+  data?: Record<string, any>
+): string {
+  switch (eventType) {
+    case 'click':
+      return `Clicked ${data?.descriptor || data?.elementPath || 'element'}`;
+    case 'add_to_cart':
+      return `Added to cart: ${data?.productId || 'product'}`;
+    case 'variant_select':
+      return `Selected variant: ${data?.variantName || data?.variantId || 'variant'}`;
+    case 'image_zoom':
+      return `Zoomed into product image`;
+    case 'form_focus':
+      return `${data?.action === 'focus' ? 'Focused on' : 'Left'} form field: ${data?.name || data?.id || 'unknown'}`;
+    case 'navigation':
+      return `Navigated to ${data?.to || 'page'}`;
+    default:
+      return `${eventType} interaction`;
+  }
+}
+
+function buildExitContext(
+  state: SdkState,
+  trigger: ExitTriggerType
+): ExitContext {
+  return {
+    lastPageUrl: state.lastPageUrl,
+    lastPageTitle: state.lastPageTitle,
+    lastPageTimeSpentMs: Date.now() - state.lastPageEntryTime,
+    exitTrigger: trigger,
+    hadCartItems: state.hadCartItems,
+    lastInteractions: state.recentInteractions.map((i) => ({
+      type: i.type,
+      timestamp: i.timestamp,
+      description: i.description,
+    })),
+    totalSessionDurationMs: calculateSessionDuration(state),
+  };
+}
+
+function updateExitTrackingState(
+  state: SdkState,
+  eventType: EventType,
+  data?: Record<string, any>
+): void {
+  if (eventType === 'pageview' || eventType === 'navigation') {
+    state.lastPageUrl = window.location.href;
+    state.lastPageTitle = document.title;
+    state.lastPageEntryTime = Date.now();
+  }
+
+  if (eventType === 'add_to_cart') {
+    state.hadCartItems = true;
+  }
+
+  const trackableInteractions: EventType[] = [
+    'click',
+    'add_to_cart',
+    'variant_select',
+    'image_zoom',
+    'form_focus',
+    'navigation',
+  ];
+
+  if (trackableInteractions.includes(eventType)) {
+    state.recentInteractions.push({
+      type: eventType,
+      timestamp: Date.now(),
+      url: window.location.href,
+      description: buildInteractionDescription(eventType, data),
+    });
+
+    if (state.recentInteractions.length > MAX_RECENT_INTERACTIONS) {
+      state.recentInteractions = state.recentInteractions.slice(
+        -MAX_RECENT_INTERACTIONS
+      );
+    }
+  }
+}
+
+async function sendSessionEndRequest(
+  state: SdkState,
+  exitTrigger: ExitTriggerType = 'tab_close'
+): Promise<void> {
   const sessionDuration = calculateSessionDuration(state);
+  const exitContext = buildExitContext(state, exitTrigger);
 
   const response = await state.apiClient.endCurrentSession({
     projectId: state.config.projectId,
@@ -166,13 +269,13 @@ async function sendSessionEndRequest(state: SdkState): Promise<void> {
     duration: sessionDuration,
     pageViews: state.pageViewCount,
     interactions: state.interactionCount,
+    exitContext,
   });
 
   logDebugMessage(state, 'Session ended', {
     response,
     duration: sessionDuration,
-    pageViews: state.pageViewCount,
-    interactions: state.interactionCount,
+    exitTrigger,
   });
 }
 
@@ -264,6 +367,7 @@ function trackEventAndExtendSession(
   const event = buildBaseEvent(eventType, data);
   queueOrSendEventImmediately(state, event);
   updateEventCounters(state, eventType);
+  updateExitTrackingState(state, eventType, data);
   extendCurrentSessionExpiry();
 }
 
@@ -296,6 +400,10 @@ function registerCollectors(state: SdkState): void {
 
   if (capture.replay) {
     state.collectors.push(createReplayCollector());
+  }
+
+  if (capture.autoContext) {
+    state.collectors.push(createAutoContextCollector());
   }
 }
 
@@ -347,7 +455,7 @@ function flushQueueIfExists(state: SdkState): void {
 function setupPageUnloadHandler(state: SdkState): void {
   window.addEventListener('beforeunload', () => {
     flushQueueIfExists(state);
-    sendSessionEndRequest(state);
+    sendSessionEndRequest(state, 'tab_close');
   });
 }
 
@@ -411,7 +519,7 @@ function destroyEventQueueIfExists(state: SdkState): void {
 function destroySdkAndCleanup(state: SdkState): void {
   destroyAllCollectors(state);
   destroyEventQueueIfExists(state);
-  sendSessionEndRequest(state);
+  sendSessionEndRequest(state, 'idle_timeout');
   state.isInitialized = false;
   logDebugMessage(state, 'SDK destroyed');
 }
@@ -441,6 +549,11 @@ export function createCrowSDK(userConfig: CrowConfig): CrowSDK {
     interactionCount: 0,
     isInitialized: false,
     collectors: [],
+    lastPageUrl: window.location.href,
+    lastPageTitle: document.title,
+    lastPageEntryTime: Date.now(),
+    hadCartItems: false,
+    recentInteractions: [],
   };
 
   logDebugMessage(state, 'SDK initialized', { config: internalConfig });
