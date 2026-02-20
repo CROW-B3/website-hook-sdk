@@ -92,7 +92,6 @@ export function createReplayCollector(): Collector {
         stopRecording = null;
       }
 
-      // Final flush
       flushBuffer();
 
       ctx = null;

@@ -69,13 +69,11 @@ function getAccessibleName(element: HTMLElement): string | undefined {
 }
 
 function getVisibleText(element: HTMLElement): string | undefined {
-  // For buttons and links, get their direct visible text
   if (element.tagName === 'BUTTON' || element.tagName === 'A' || element.getAttribute('role') === 'button') {
     const text = element.innerText?.trim().substring(0, 200);
     if (text) return text;
   }
 
-  // For other elements, get text content (limited)
   const text = element.textContent?.trim().substring(0, 100);
   return text || undefined;
 }
@@ -103,12 +101,10 @@ function getElementRole(element: HTMLElement): string | undefined {
 }
 
 function getNearestHeading(element: HTMLElement): string | undefined {
-  // Walk up the DOM looking for a nearby heading that provides context
   let current: HTMLElement | null = element;
   let depth = 0;
 
   while (current && depth < 10) {
-    // Check siblings before this element for headings
     let sibling = current.previousElementSibling;
     while (sibling) {
       if (/^H[1-6]$/.test(sibling.tagName)) {
@@ -117,7 +113,6 @@ function getNearestHeading(element: HTMLElement): string | undefined {
       sibling = sibling.previousElementSibling;
     }
 
-    // Check if parent contains a heading as first child
     if (current.parentElement) {
       const heading: Element | null = current.parentElement.querySelector('h1, h2, h3, h4, h5, h6');
       if (heading && heading !== current) {
@@ -177,19 +172,14 @@ export function createInteractionCollector(): Collector {
     return nearbyClicks.length >= RAGE_CLICK_THRESHOLD;
   }
 
-  function handleClick(event: MouseEvent): void {
-    if (!ctx) return;
-
-    const target = event.target as HTMLElement;
+  function buildClickEventData(
+    event: MouseEvent,
+    target: HTMLElement
+  ): Record<string, unknown> {
     const elementPath = getElementPath(target);
-    const dataAttrs = getDataAttributes(target);
-    const accessibleName = getAccessibleName(target);
-    const visibleText = getVisibleText(target);
-    const role = getElementRole(target);
-    const descriptor = getElementDescriptor(target);
-    const nearestHeading = getNearestHeading(target);
+    const dataAttributes = getDataAttributes(target);
 
-    ctx.trackEvent('click', {
+    return {
       tagName: target.tagName,
       id: target.id || undefined,
       className: target.className || undefined,
@@ -200,34 +190,41 @@ export function createInteractionCollector(): Collector {
       pageX: event.pageX,
       pageY: event.pageY,
       elementPath,
-      dataAttributes: Object.keys(dataAttrs).length > 0 ? dataAttrs : undefined,
-      // AI-friendly element identification
-      accessibleName,
-      visibleText,
-      role,
-      descriptor,
-      nearestHeading,
+      dataAttributes: Object.keys(dataAttributes).length > 0 ? dataAttributes : undefined,
+      accessibleName: getAccessibleName(target),
+      visibleText: getVisibleText(target),
+      role: getElementRole(target),
+      descriptor: getElementDescriptor(target),
+      nearestHeading: getNearestHeading(target),
       ariaLabel: target.getAttribute('aria-label') || undefined,
       placeholder: (target as HTMLInputElement).placeholder || undefined,
       title: target.getAttribute('title') || undefined,
       alt: (target as HTMLImageElement).alt || undefined,
-      // Viewport context at time of click
       scrollY: window.scrollY,
       scrollX: window.scrollX,
       viewportHeight: window.innerHeight,
       viewportWidth: window.innerWidth,
       autoCapture: true,
-    });
+    };
+  }
+
+  function handleClick(event: MouseEvent): void {
+    if (!ctx) return;
+
+    const target = event.target as HTMLElement;
+    const clickEventData = buildClickEventData(event, target);
+
+    ctx.trackEvent('click', clickEventData);
 
     if (detectRageClick(event.clientX, event.clientY, Date.now())) {
       ctx.trackEvent('rage_click', {
         x: event.clientX,
         y: event.clientY,
-        elementPath,
+        elementPath: clickEventData.elementPath,
         tagName: target.tagName,
         clickCount: recentClicks.length,
       });
-      ctx.debug('Rage click detected', { elementPath });
+      ctx.debug('Rage click detected', { elementPath: clickEventData.elementPath });
     }
   }
 

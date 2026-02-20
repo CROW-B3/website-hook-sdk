@@ -50,40 +50,36 @@ export function createPerformanceCollector(): Collector {
     }
   }
 
-  function observeWebVitals(): void {
-    if (typeof PerformanceObserver === 'undefined') return;
-
-    for (const type of WEB_VITAL_TYPES) {
-      try {
-        const observer = new PerformanceObserver((list) => {
-          for (const entry of list.getEntries()) {
-            if (type === 'layout-shift') {
-              const lsEntry = entry as any;
-              if (!lsEntry.hadRecentInput) {
-                clsValue += lsEntry.value;
-                trackWebVital('CLS', clsValue, entry);
-              }
-            } else if (type === 'first-input') {
-              const fiEntry = entry as any;
-              trackWebVital('FID', fiEntry.processingStart - fiEntry.startTime, entry);
-            } else if (type === 'largest-contentful-paint') {
-              trackWebVital('LCP', entry.startTime, entry);
-            } else if (type === 'paint') {
-              const vitalName = mapVitalName(type, entry.name);
-              trackWebVital(vitalName, entry.startTime, entry);
-            }
-          }
-        });
-        observer.observe({ type, buffered: true });
-        observers.push(observer);
-      } catch {
-        // Observer type not supported
+  function handleWebVitalEntry(type: string, entry: PerformanceEntry): void {
+    if (type === 'layout-shift') {
+      const layoutShiftEntry = entry as any;
+      if (!layoutShiftEntry.hadRecentInput) {
+        clsValue += layoutShiftEntry.value;
+        trackWebVital('CLS', clsValue, entry);
       }
+      return;
     }
 
-    // Long tasks
+    if (type === 'first-input') {
+      const firstInputEntry = entry as any;
+      trackWebVital('FID', firstInputEntry.processingStart - firstInputEntry.startTime, entry);
+      return;
+    }
+
+    if (type === 'largest-contentful-paint') {
+      trackWebVital('LCP', entry.startTime, entry);
+      return;
+    }
+
+    if (type === 'paint') {
+      trackWebVital(mapVitalName(type, entry.name), entry.startTime, entry);
+    }
+  }
+
+  // Observes long-running tasks that may indicate performance issues
+  function observeLongTasks(): void {
     try {
-      const ltObserver = new PerformanceObserver((list) => {
+      const longTaskObserver = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
           if (!ctx) return;
           ctx.trackEvent('performance', {
@@ -93,11 +89,27 @@ export function createPerformanceCollector(): Collector {
           });
         }
       });
-      ltObserver.observe({ type: LONG_TASK_TYPE, buffered: true });
-      observers.push(ltObserver);
-    } catch {
-      // Long task observer not supported
+      longTaskObserver.observe({ type: LONG_TASK_TYPE, buffered: true });
+      observers.push(longTaskObserver);
+    } catch { }
+  }
+
+  function observeWebVitals(): void {
+    if (typeof PerformanceObserver === 'undefined') return;
+
+    for (const type of WEB_VITAL_TYPES) {
+      try {
+        const observer = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            handleWebVitalEntry(type, entry);
+          }
+        });
+        observer.observe({ type, buffered: true });
+        observers.push(observer);
+      } catch { }
     }
+
+    observeLongTasks();
   }
 
   function trackNavigationTiming(): void {
@@ -179,12 +191,10 @@ export function createPerformanceCollector(): Collector {
       observeWebVitals();
       monkeyPatchFetch();
 
-      // Track navigation timing after page load
       if (document.readyState === 'complete') {
         trackNavigationTiming();
       } else {
         window.addEventListener('load', () => {
-          // Delay to ensure loadEventEnd is populated
           setTimeout(trackNavigationTiming, 0);
         });
       }

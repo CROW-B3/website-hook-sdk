@@ -79,9 +79,7 @@ function extractJsonLdProducts(): ExtractedProductData[] {
           }
         }
       }
-    } catch {
-      // Malformed JSON-LD, skip
-    }
+    } catch { }
   }
 
   return results;
