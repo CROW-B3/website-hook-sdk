@@ -14,6 +14,7 @@ export interface CaptureConfig {
   performance: boolean;
   replay: boolean;
   autoContext: boolean;
+  sendAnalyticsEvents?: boolean;
 }
 
 export interface User {
@@ -34,12 +35,8 @@ export type EventType =
   | 'custom'
   | 'error'
   | 'navigation'
-  | 'engagement'
   | 'scroll'
-  | 'visibility'
   | 'rage_click'
-  | 'hover'
-  | 'form_focus'
   | 'add_to_cart'
   | 'variant_select'
   | 'image_zoom'

@@ -55,6 +55,7 @@ const DEFAULT_CAPTURE_CONFIG: CaptureConfig = {
   performance: true,
   replay: true,
   autoContext: true,
+  sendAnalyticsEvents: false,
 };
 
 const DEFAULT_BATCHING_CONFIG = {
@@ -188,8 +189,6 @@ function buildInteractionDescription(
       return `Selected variant: ${data?.variantName || data?.variantId || 'variant'}`;
     case 'image_zoom':
       return `Zoomed into product image`;
-    case 'form_focus':
-      return `${data?.action === 'focus' ? 'Focused on' : 'Left'} form field: ${data?.name || data?.id || 'unknown'}`;
     case 'navigation':
       return `Navigated to ${data?.to || 'page'}`;
     default:
@@ -236,7 +235,6 @@ function updateExitTrackingState(
     'add_to_cart',
     'variant_select',
     'image_zoom',
-    'form_focus',
     'navigation',
   ];
 
@@ -359,16 +357,28 @@ function updateEventCounters(state: SdkState, eventType: EventType): void {
   incrementInteractionCounter(state);
 }
 
+const ANALYTICS_ONLY_EVENTS: Set<EventType> = new Set([
+  'click', 'rage_click', 'scroll', 'navigation',
+]);
+
 function trackEventAndExtendSession(
   state: SdkState,
   eventType: EventType,
   data?: Record<string, any>
 ): void {
-  const event = buildBaseEvent(eventType, data);
-  queueOrSendEventImmediately(state, event);
+  // Always update local state (counters, exit context) regardless of send gate
   updateEventCounters(state, eventType);
   updateExitTrackingState(state, eventType, data);
   extendCurrentSessionExpiry();
+
+  // Skip sending to backend if gated
+  if (ANALYTICS_ONLY_EVENTS.has(eventType) && !state.config.capture.sendAnalyticsEvents) {
+    logDebugMessage(state, `Event "${eventType}" gated - not sent to backend`);
+    return;
+  }
+
+  const event = buildBaseEvent(eventType, data);
+  queueOrSendEventImmediately(state, event);
 }
 
 function registerCollectors(state: SdkState): void {

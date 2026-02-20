@@ -3,7 +3,6 @@ import type { Collector, CollectorContext } from './types';
 const RAGE_CLICK_THRESHOLD = 3;
 const RAGE_CLICK_WINDOW_MS = 1000;
 const RAGE_CLICK_RADIUS_PX = 30;
-const HOVER_THRESHOLD_MS = 500;
 
 interface ClickRecord {
   x: number;
@@ -147,13 +146,8 @@ function distanceBetween(a: ClickRecord, b: ClickRecord): number {
 export function createInteractionCollector(): Collector {
   let ctx: CollectorContext | null = null;
   let clickHandler: ((e: MouseEvent) => void) | null = null;
-  let hoverEnterHandler: ((e: MouseEvent) => void) | null = null;
-  let hoverLeaveHandler: ((e: MouseEvent) => void) | null = null;
-  let focusInHandler: ((e: FocusEvent) => void) | null = null;
-  let focusOutHandler: ((e: FocusEvent) => void) | null = null;
 
   const recentClicks: ClickRecord[] = [];
-  const hoverStartTimes = new WeakMap<EventTarget, number>();
 
   function detectRageClick(x: number, y: number, timestamp: number): boolean {
     recentClicks.push({ x, y, timestamp });
@@ -228,66 +222,6 @@ export function createInteractionCollector(): Collector {
     }
   }
 
-  function handleHoverEnter(event: MouseEvent): void {
-    if (event.target) {
-      hoverStartTimes.set(event.target, Date.now());
-    }
-  }
-
-  function handleHoverLeave(event: MouseEvent): void {
-    if (!ctx || !event.target) return;
-
-    const startTime = hoverStartTimes.get(event.target);
-    if (!startTime) return;
-
-    const duration = Date.now() - startTime;
-    hoverStartTimes.delete(event.target);
-
-    if (duration >= HOVER_THRESHOLD_MS) {
-      const target = event.target as HTMLElement;
-      ctx.trackEvent('hover', {
-        tagName: target.tagName,
-        id: target.id || undefined,
-        elementPath: getElementPath(target),
-        duration,
-      });
-    }
-  }
-
-  function handleFocusIn(event: FocusEvent): void {
-    if (!ctx) return;
-
-    const target = event.target as HTMLInputElement;
-    if (!target || !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
-
-    ctx.trackEvent('form_focus', {
-      action: 'focus',
-      tagName: target.tagName,
-      type: target.type || undefined,
-      name: target.name || undefined,
-      id: target.id || undefined,
-      elementPath: getElementPath(target),
-      timestamp: Date.now(),
-    });
-  }
-
-  function handleFocusOut(event: FocusEvent): void {
-    if (!ctx) return;
-
-    const target = event.target as HTMLInputElement;
-    if (!target || !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
-
-    ctx.trackEvent('form_focus', {
-      action: 'blur',
-      tagName: target.tagName,
-      type: target.type || undefined,
-      name: target.name || undefined,
-      id: target.id || undefined,
-      elementPath: getElementPath(target),
-      timestamp: Date.now(),
-    });
-  }
-
   return {
     name: 'interaction',
 
@@ -295,26 +229,14 @@ export function createInteractionCollector(): Collector {
       ctx = context;
 
       clickHandler = handleClick;
-      hoverEnterHandler = handleHoverEnter;
-      hoverLeaveHandler = handleHoverLeave;
-      focusInHandler = handleFocusIn;
-      focusOutHandler = handleFocusOut;
 
       document.addEventListener('click', clickHandler);
-      document.addEventListener('mouseenter', hoverEnterHandler, true);
-      document.addEventListener('mouseleave', hoverLeaveHandler, true);
-      document.addEventListener('focusin', focusInHandler);
-      document.addEventListener('focusout', focusOutHandler);
 
       ctx.debug('Interaction collector initialized');
     },
 
     destroy(): void {
       if (clickHandler) document.removeEventListener('click', clickHandler);
-      if (hoverEnterHandler) document.removeEventListener('mouseenter', hoverEnterHandler, true);
-      if (hoverLeaveHandler) document.removeEventListener('mouseleave', hoverLeaveHandler, true);
-      if (focusInHandler) document.removeEventListener('focusin', focusInHandler);
-      if (focusOutHandler) document.removeEventListener('focusout', focusOutHandler);
       recentClicks.length = 0;
       ctx = null;
     },
