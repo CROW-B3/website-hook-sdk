@@ -3,6 +3,8 @@ import type {
   ApiResponse,
   BatchRequest,
   BatchResponse,
+  ReplayBatchRequest,
+  ReplayBatchResponse,
   SessionEndRequest,
   SessionResponse,
   SessionStartRequest,
@@ -18,6 +20,7 @@ export type ApiClient = {
   sendBatchedEvents: (data: BatchRequest) => Promise<BatchResponse>;
   startNewSession: (data: SessionStartRequest) => Promise<SessionResponse>;
   endCurrentSession: (data: SessionEndRequest) => Promise<ApiResponse>;
+  sendReplayBatch: (data: ReplayBatchRequest) => Promise<ReplayBatchResponse>;
 };
 
 function createHttpClient(baseUrl: string) {
@@ -92,6 +95,21 @@ async function sendSessionEndRequest(
   }
 }
 
+async function sendReplayBatchRequest(
+  httpClient: ReturnType<typeof ky.create>,
+  replayData: ReplayBatchRequest
+): Promise<ReplayBatchResponse> {
+  try {
+    return await httpClient
+      .post('replay/batch', { json: replayData })
+      .json<ReplayBatchResponse>();
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Failed to send replay batch: ${errorMessage}`);
+  }
+}
+
 export function createApiClient(baseUrl: string): ApiClient {
   const httpClient = createHttpClient(baseUrl);
 
@@ -104,5 +122,7 @@ export function createApiClient(baseUrl: string): ApiClient {
       sendSessionStartRequest(httpClient, data),
     endCurrentSession: async (data: SessionEndRequest) =>
       sendSessionEndRequest(httpClient, data),
+    sendReplayBatch: async (data: ReplayBatchRequest) =>
+      sendReplayBatchRequest(httpClient, data),
   };
 }

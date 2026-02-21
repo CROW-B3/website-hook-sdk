@@ -1,28 +1,53 @@
 import type {
   BaseEvent,
+  CaptureConfig,
   CrowConfig,
   EventType,
+  ExitContext,
+  ExitTriggerType,
   ScreenSize,
   SessionContext,
-  User,
 } from './types';
 import type { ApiClient } from './api/client';
 import type { EventQueue } from './utils/queue';
+import type { Collector, CollectorContext } from './collectors/types';
+import type {
+  AddToCartData,
+  ImageZoomData,
+  VariantSelectData,
+} from './collectors/ecommerce';
 import { createApiClient } from './api/client';
 import {
   extendCurrentSessionExpiry,
-  getOrCreateAnonymousId,
   getOrCreateSessionId,
 } from './utils/id';
 import { createEventQueue } from './utils/queue';
 import { isBrowserEnvironment } from './utils/environment';
 import { NEXT_BASE_URL } from './constants';
+import { createNavigationCollector } from './collectors/navigation';
+import { createEngagementCollector } from './collectors/engagement';
+import { createInteractionCollector } from './collectors/interaction';
+import {
+  createEcommerceCollector,
+  trackAddToCart as ecommerceTrackAddToCart,
+  trackVariantSelect as ecommerceTrackVariantSelect,
+  trackImageZoom as ecommerceTrackImageZoom,
+} from './collectors/ecommerce';
+import { createPerformanceCollector } from './collectors/performance';
+import { createErrorCollector } from './collectors/error';
+import { createReplayCollector } from './collectors/replay';
 
-const DEFAULT_CAPTURE_CONFIG = {
+const DEFAULT_CAPTURE_CONFIG: CaptureConfig = {
   pageViews: true,
   clicks: true,
   errors: true,
-} as const;
+  navigation: true,
+  engagement: true,
+  interactions: true,
+  performance: true,
+  replay: true,
+  sendAnalyticsEvents: false,
+};
 
 const DEFAULT_BATCHING_CONFIG = {
   enabled: true,
@@ -31,13 +56,8 @@ const DEFAULT_BATCHING_CONFIG = {
 } as const;
 
 type InternalConfig = {
-  projectId: string;
   apiEndpoint: string;
-  capture: {
-    pageViews: boolean;
-    clicks: boolean;
-    errors: boolean;
-  };
+  capture: CaptureConfig;
   batching: {
     enabled: boolean;
     maxBatchSize: number;
@@ -46,17 +66,30 @@ type InternalConfig = {
   debug: boolean;
 };
 
+const MAX_RECENT_INTERACTIONS = 10;
+
+interface RecentInteraction {
+  type: string;
+  timestamp: number;
+  url: string;
+  description: string;
+}
+
 type SdkState = {
   config: InternalConfig;
   apiClient: ApiClient;
   sessionId: string;
-  anonymousId: string;
-  user: User;
   eventQueue: EventQueue | null;
   sessionStartTime: number;
   pageViewCount: number;
   interactionCount: number;
   isInitialized: boolean;
+  collectors: Collector[];
+  lastPageUrl: string;
+  lastPageTitle: string;
+  lastPageEntryTime: number;
+  hadCartItems: boolean;
+  recentInteractions: RecentInteraction[];
 };
 
 export type CrowSDK = {
@@ -64,9 +97,11 @@ export type CrowSDK = {
   trackEvent: (eventType: EventType, data?: Record<string, any>) => void;
   trackPageView: (data?: Record<string, any>) => void;
   trackClick: (data?: Record<string, any>) => void;
-  identifyUser: (userId: string, traits?: Record<string, any>) => void;
   flushQueuedEvents: () => Promise<void>;
   destroySdk: () => void;
+  trackAddToCart: (data: AddToCartData) => void;
+  trackVariantSelect: (data: VariantSelectData) => void;
+  trackImageZoom: (data: ImageZoomData) => void;
 };
 
 function throwIfNotBrowserEnvironment(): void {
@@ -76,9 +111,11 @@ function throwIfNotBrowserEnvironment(): void {
 
 function buildInternalConfig(userConfig: CrowConfig): InternalConfig {
   return {
-    projectId: userConfig.projectId,
     apiEndpoint: NEXT_BASE_URL,
-    capture: DEFAULT_CAPTURE_CONFIG,
+    capture: {
+      ...DEFAULT_CAPTURE_CONFIG,
+      ...userConfig.capture,
+    },
     batching: DEFAULT_BATCHING_CONFIG,
     debug: userConfig.debug ?? false,
   };
@@ -111,9 +148,7 @@ async function sendSessionStartRequest(state: SdkState): Promise<void> {
   const sessionContext = buildSessionContext();
 
   const response = await state.apiClient.startNewSession({
-    projectId: state.config.projectId,
     sessionId: state.sessionId,
-    user: state.user,
     context: sessionContext,
   });
 
@@ -124,22 +159,103 @@ function calculateSessionDuration(state: SdkState): number {
   return Date.now() - state.sessionStartTime;
 }
 
-async function sendSessionEndRequest(state: SdkState): Promise<void> {
+function buildInteractionDescription(
+  eventType: EventType,
+  data?: Record<string, any>
+): string {
+  switch (eventType) {
+    case 'click':
+      return `Clicked ${data?.descriptor || data?.elementPath || 'element'}`;
+    case 'add_to_cart':
+      return `Added to cart: ${data?.productId || 'product'}`;
+    case 'variant_select':
+      return `Selected variant: ${data?.variantName || data?.variantId || 'variant'}`;
+    case 'image_zoom':
+      return `Zoomed into product image`;
+    case 'navigation':
+      return `Navigated to ${data?.to || 'page'}`;
+    default:
+      return `${eventType} interaction`;
+  }
+}
+
+function buildExitContext(
+  state: SdkState,
+  trigger: ExitTriggerType
+): ExitContext {
+  return {
+    lastPageUrl: state.lastPageUrl,
+    lastPageTitle: state.lastPageTitle,
+    lastPageTimeSpentMs: Date.now() - state.lastPageEntryTime,
+    exitTrigger: trigger,
+    hadCartItems: state.hadCartItems,
+    lastInteractions: state.recentInteractions.map((i) => ({
+      type: i.type,
+      timestamp: i.timestamp,
+      description: i.description,
+    })),
+    totalSessionDurationMs: calculateSessionDuration(state),
+  };
+}
+
+function updateExitTrackingState(
+  state: SdkState,
+  eventType: EventType,
+  data?: Record<string, any>
+): void {
+  if (eventType === 'pageview' || eventType === 'navigation') {
+    state.lastPageUrl = window.location.href;
+    state.lastPageTitle = document.title;
+    state.lastPageEntryTime = Date.now();
+  }
+
+  if (eventType === 'add_to_cart') {
+    state.hadCartItems = true;
+  }
+
+  const trackableInteractions: EventType[] = [
+    'click',
+    'add_to_cart',
+    'variant_select',
+    'image_zoom',
+    'navigation',
+  ];
+
+  if (trackableInteractions.includes(eventType)) {
+    state.recentInteractions.push({
+      type: eventType,
+      timestamp: Date.now(),
+      url: window.location.href,
+      description: buildInteractionDescription(eventType, data),
+    });
+
+    if (state.recentInteractions.length > MAX_RECENT_INTERACTIONS) {
+      state.recentInteractions = state.recentInteractions.slice(
+        -MAX_RECENT_INTERACTIONS
+      );
+    }
+  }
+}
+
+async function sendSessionEndRequest(
+  state: SdkState,
+  exitTrigger: ExitTriggerType = 'tab_close'
+): Promise<void> {
   const sessionDuration = calculateSessionDuration(state);
+  const exitContext = buildExitContext(state, exitTrigger);
 
   const response = await state.apiClient.endCurrentSession({
-    projectId: state.config.projectId,
     sessionId: state.sessionId,
     duration: sessionDuration,
     pageViews: state.pageViewCount,
     interactions: state.interactionCount,
+    exitContext,
   });
 
   logDebugMessage(state, 'Session ended', {
     response,
     duration: sessionDuration,
-    pageViews: state.pageViewCount,
-    interactions: state.interactionCount,
+    exitTrigger,
   });
 }
 
@@ -152,7 +268,15 @@ function buildBaseEvent(
     timestamp: Date.now(),
     url: window.location.href,
     referrer: document.referrer,
-    data: eventData,
+    data: {
+      ...eventData,
+      pageTitle: document.title,
+      scrollPosition: {
+        x: window.scrollX,
+        y: window.scrollY,
+      },
+      documentHeight: document.documentElement.scrollHeight,
+    },
     userAgent: navigator.userAgent,
     screenSize: getCurrentScreenSize(),
   };
@@ -163,10 +287,8 @@ async function sendSingleEventToApi(
   event: BaseEvent
 ): Promise<void> {
   const response = await state.apiClient.sendTrackingEvent({
-    projectId: state.config.projectId,
     sessionId: state.sessionId,
     event,
-    user: state.user,
   });
 
   logDebugMessage(state, 'Event sent', { event, response });
@@ -179,10 +301,8 @@ async function sendBatchedEventsToApi(
   if (events.length === 0) return;
 
   const response = await state.apiClient.sendBatchedEvents({
-    projectId: state.config.projectId,
     sessionId: state.sessionId,
     events,
-    user: state.user,
   });
 
   logDebugMessage(state, 'Batch sent', { eventCount: events.length, response });
@@ -215,69 +335,99 @@ function updateEventCounters(state: SdkState, eventType: EventType): void {
   incrementInteractionCounter(state);
 }
 
+const ANALYTICS_ONLY_EVENTS: Set<EventType> = new Set([
+  'click', 'rage_click', 'scroll', 'navigation',
+]);
+
 function trackEventAndExtendSession(
   state: SdkState,
   eventType: EventType,
   data?: Record<string, any>
 ): void {
+  // Always update local state (counters, exit context) regardless of send gate
+  updateEventCounters(state, eventType);
+  updateExitTrackingState(state, eventType, data);
+  extendCurrentSessionExpiry();
+
+  // Skip sending to backend if gated
+  if (ANALYTICS_ONLY_EVENTS.has(eventType) && !state.config.capture.sendAnalyticsEvents) {
+    logDebugMessage(state, `Event "${eventType}" gated - not sent to backend`);
+    return;
+  }
+
   const event = buildBaseEvent(eventType, data);
   queueOrSendEventImmediately(state, event);
-  updateEventCounters(state, eventType);
-  extendCurrentSessionExpiry();
 }
 
-function extractClickDataFromEvent(
-  clickEvent: MouseEvent
-): Record<string, any> {
-  const targetElement = clickEvent.target as HTMLElement;
+function registerCollectors(state: SdkState): void {
+  const { capture } = state.config;
+
+  // Always register ecommerce (it's API-driven, not auto-capture)
+  state.collectors.push(createEcommerceCollector());
+
+  if (capture.errors) {
+    state.collectors.push(createErrorCollector());
+  }
+
+  if (capture.navigation) {
+    state.collectors.push(createNavigationCollector());
+  }
+
+  if (capture.engagement) {
+    state.collectors.push(createEngagementCollector());
+  }
+
+  if (capture.interactions) {
+    state.collectors.push(createInteractionCollector());
+  }
+
+  if (capture.performance) {
+    state.collectors.push(createPerformanceCollector());
+  }
+
+  if (capture.replay) {
+    state.collectors.push(createReplayCollector());
+  }
+
+}
+
+function buildCollectorContext(state: SdkState): CollectorContext {
   return {
-    tagName: targetElement.tagName,
-    id: targetElement.id || undefined,
-    className: targetElement.className || undefined,
-    text: targetElement.textContent?.substring(0, 100),
-    autoCapture: true,
+    trackEvent: (eventType: EventType, data?: Record<string, any>) =>
+      trackEventAndExtendSession(state, eventType, data),
+    config: state.config.capture,
+    sessionId: state.sessionId,
+    apiClient: state.apiClient,
+    debug: (message: string, data?: any) => logDebugMessage(state, message, data),
   };
 }
 
-function setupClickAutoCapture(state: SdkState): void {
-  if (!state.config.capture.clicks) return;
-
-  document.addEventListener('click', clickEvent => {
-    const clickData = extractClickDataFromEvent(clickEvent);
-    trackEventAndExtendSession(state, 'click', clickData);
-  });
+function initializeAllCollectors(state: SdkState): void {
+  const context = buildCollectorContext(state);
+  for (const collector of state.collectors) {
+    try {
+      collector.initialize(context);
+      logDebugMessage(state, `Collector "${collector.name}" initialized`);
+    } catch (error) {
+      console.error(`[Crow] Failed to initialize collector "${collector.name}":`, error);
+    }
+  }
 }
 
-function extractErrorDataFromEvent(
-  errorEvent: ErrorEvent
-): Record<string, any> {
-  return {
-    message: errorEvent.message,
-    filename: errorEvent.filename,
-    lineno: errorEvent.lineno,
-    colno: errorEvent.colno,
-    autoCapture: true,
-  };
-}
-
-function setupErrorAutoCapture(state: SdkState): void {
-  if (!state.config.capture.errors) return;
-
-  window.addEventListener('error', errorEvent => {
-    const errorData = extractErrorDataFromEvent(errorEvent);
-    trackEventAndExtendSession(state, 'error', errorData);
-  });
+function destroyAllCollectors(state: SdkState): void {
+  for (const collector of state.collectors) {
+    try {
+      collector.destroy();
+    } catch (error) {
+      console.error(`[Crow] Failed to destroy collector "${collector.name}":`, error);
+    }
+  }
+  state.collectors = [];
 }
 
 function setupPageViewAutoCapture(state: SdkState): void {
   if (!state.config.capture.pageViews) return;
   trackEventAndExtendSession(state, 'pageview', { autoCapture: true });
-}
-
-function setupAllAutoCapture(state: SdkState): void {
-  setupPageViewAutoCapture(state);
-  setupClickAutoCapture(state);
-  setupErrorAutoCapture(state);
 }
 
 function flushQueueIfExists(state: SdkState): void {
@@ -288,7 +438,7 @@ function flushQueueIfExists(state: SdkState): void {
 function setupPageUnloadHandler(state: SdkState): void {
   window.addEventListener('beforeunload', () => {
     flushQueueIfExists(state);
-    sendSessionEndRequest(state);
+    sendSessionEndRequest(state, 'tab_close');
   });
 }
 
@@ -310,25 +460,17 @@ async function initializeSdkInternal(state: SdkState): Promise<void> {
 
   await sendSessionStartRequest(state);
   createEventQueueIfBatchingEnabled(state);
-  setupAllAutoCapture(state);
+
+  // Register and initialize collectors (handles clicks, errors, etc.)
+  registerCollectors(state);
+  initializeAllCollectors(state);
+
+  // Auto-capture initial pageview
+  setupPageViewAutoCapture(state);
   setupPageUnloadHandler(state);
 
   state.isInitialized = true;
   logDebugMessage(state, 'SDK initialization complete');
-}
-
-function updateUserIdentity(
-  state: SdkState,
-  userId: string,
-  traits?: Record<string, any>
-): void {
-  state.user = {
-    id: userId,
-    anonymousId: state.anonymousId,
-    traits,
-  };
-
-  logDebugMessage(state, 'User identified', { userId, traits });
 }
 
 async function flushAllQueuedEvents(state: SdkState): Promise<void> {
@@ -344,8 +486,9 @@ function destroyEventQueueIfExists(state: SdkState): void {
 }
 
 function destroySdkAndCleanup(state: SdkState): void {
+  destroyAllCollectors(state);
   destroyEventQueueIfExists(state);
-  sendSessionEndRequest(state);
+  sendSessionEndRequest(state, 'idle_timeout');
   state.isInitialized = false;
   logDebugMessage(state, 'SDK destroyed');
 }
@@ -361,19 +504,22 @@ export function createCrowSDK(userConfig: CrowConfig): CrowSDK {
   const internalConfig = buildInternalConfig(userConfig);
   const apiClient = createApiClient(internalConfig.apiEndpoint);
   const sessionId = getOrCreateSessionId();
-  const anonymousId = getOrCreateAnonymousId();
 
   const state: SdkState = {
     config: internalConfig,
     apiClient,
     sessionId,
-    anonymousId,
-    user: { anonymousId },
     eventQueue: null,
     sessionStartTime: Date.now(),
     pageViewCount: 0,
     interactionCount: 0,
     isInitialized: false,
+    collectors: [],
+    lastPageUrl: window.location.href,
+    lastPageTitle: document.title,
+    lastPageEntryTime: Date.now(),
+    hadCartItems: false,
+    recentInteractions: [],
   };
 
   logDebugMessage(state, 'SDK initialized', { config: internalConfig });
@@ -384,9 +530,11 @@ export function createCrowSDK(userConfig: CrowConfig): CrowSDK {
       trackEventAndExtendSession(state, eventType, data),
     trackPageView: data => trackEventAndExtendSession(state, 'pageview', data),
     trackClick: data => trackEventAndExtendSession(state, 'click', data),
-    identifyUser: (userId, traits) => updateUserIdentity(state, userId, traits),
     flushQueuedEvents: async () => flushAllQueuedEvents(state),
     destroySdk: () => destroySdkAndCleanup(state),
+    trackAddToCart: data => ecommerceTrackAddToCart(data),
+    trackVariantSelect: data => ecommerceTrackVariantSelect(data),
+    trackImageZoom: data => ecommerceTrackImageZoom(data),
   };
 
   makeGloballyAvailableForDebugging(sdkInstance);

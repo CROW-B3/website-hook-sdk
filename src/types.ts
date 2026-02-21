@@ -1,12 +1,18 @@
 export interface CrowConfig {
-  projectId: string;
   debug?: boolean;
+  capture?: Partial<CaptureConfig>;
 }
 
-export interface User {
-  id?: string;
-  anonymousId: string;
-  traits?: Record<string, any>;
+export interface CaptureConfig {
+  pageViews: boolean;
+  clicks: boolean;
+  errors: boolean;
+  navigation: boolean;
+  engagement: boolean;
+  interactions: boolean;
+  performance: boolean;
+  replay: boolean;
+  sendAnalyticsEvents?: boolean;
 }
 
 export interface ScreenSize {
@@ -14,7 +20,21 @@ export interface ScreenSize {
   height: number;
 }
 
-export type EventType = 'pageview' | 'click' | 'form' | 'custom' | 'error';
+export type EventType =
+  | 'pageview'
+  | 'click'
+  | 'form'
+  | 'custom'
+  | 'error'
+  | 'navigation'
+  | 'scroll'
+  | 'rage_click'
+  | 'add_to_cart'
+  | 'variant_select'
+  | 'image_zoom'
+  | 'performance'
+  | 'web_vital'
+  | 'api_error';
 
 export interface BaseEvent {
   type: EventType;
@@ -35,33 +55,63 @@ export interface SessionContext {
   locale: string;
 }
 
+export interface UtmParameters {
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_term?: string;
+  utm_content?: string;
+}
+
+export interface ReplayBatchRequest {
+  sessionId: string;
+  chunkIndex: number;
+  events: any[];
+  timestamp: number;
+}
+
+export interface ReplayBatchResponse {
+  success: boolean;
+  chunkId?: string;
+}
+
 export interface TrackRequest {
-  projectId: string;
   sessionId: string;
   event: BaseEvent;
-  user?: User;
 }
 
 export interface BatchRequest {
-  projectId: string;
   sessionId: string;
   events: BaseEvent[];
-  user?: User;
 }
 
 export interface SessionStartRequest {
-  projectId: string;
   sessionId: string;
-  user: User;
   context: SessionContext;
 }
 
+export type ExitTriggerType = 'tab_close' | 'navigation_away' | 'idle_timeout';
+
+export interface ExitContext {
+  lastPageUrl: string;
+  lastPageTitle: string;
+  lastPageTimeSpentMs: number;
+  exitTrigger: ExitTriggerType;
+  hadCartItems: boolean;
+  lastInteractions: Array<{
+    type: string;
+    timestamp: number;
+    description: string;
+  }>;
+  totalSessionDurationMs: number;
+}
+
 export interface SessionEndRequest {
-  projectId: string;
   sessionId: string;
   duration: number;
   pageViews: number;
   interactions: number;
+  exitContext?: ExitContext;
 }
 
 export interface ApiResponse {
