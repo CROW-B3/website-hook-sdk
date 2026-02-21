@@ -66,6 +66,7 @@ export function createReplayCollector(): Collector {
         stopRecording = record({
           maskAllInputs: true,
           blockClass: 'crow-block',
+          inlineImages: true,
           emit(event) {
             eventBuffer.push(event);
 
