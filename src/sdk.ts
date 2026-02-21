@@ -5,7 +5,6 @@ import type {
   EventType,
   ExitContext,
   ExitTriggerType,
-  ProductSnapshot,
   ScreenSize,
   SessionContext,
 } from './types';
@@ -34,14 +33,9 @@ import {
   trackVariantSelect as ecommerceTrackVariantSelect,
   trackImageZoom as ecommerceTrackImageZoom,
 } from './collectors/ecommerce';
-import {
-  createContextSnapshotCollector,
-  captureProductSnapshot as contextCaptureSnapshot,
-} from './collectors/context-snapshot';
 import { createPerformanceCollector } from './collectors/performance';
 import { createErrorCollector } from './collectors/error';
 import { createReplayCollector } from './collectors/replay';
-import { createAutoContextCollector } from './collectors/auto-context';
 
 const DEFAULT_CAPTURE_CONFIG: CaptureConfig = {
   pageViews: true,
@@ -52,7 +46,6 @@ const DEFAULT_CAPTURE_CONFIG: CaptureConfig = {
   interactions: true,
   performance: true,
   replay: true,
-  autoContext: true,
   sendAnalyticsEvents: false,
 };
 
@@ -109,7 +102,6 @@ export type CrowSDK = {
   trackAddToCart: (data: AddToCartData) => void;
   trackVariantSelect: (data: VariantSelectData) => void;
   trackImageZoom: (data: ImageZoomData) => void;
-  captureProductSnapshot: (snapshot: ProductSnapshot) => void;
 };
 
 function throwIfNotBrowserEnvironment(): void {
@@ -370,9 +362,8 @@ function trackEventAndExtendSession(
 function registerCollectors(state: SdkState): void {
   const { capture } = state.config;
 
-  // Always register ecommerce and context-snapshot (they're API-driven, not auto-capture)
+  // Always register ecommerce (it's API-driven, not auto-capture)
   state.collectors.push(createEcommerceCollector());
-  state.collectors.push(createContextSnapshotCollector());
 
   if (capture.errors) {
     state.collectors.push(createErrorCollector());
@@ -398,9 +389,6 @@ function registerCollectors(state: SdkState): void {
     state.collectors.push(createReplayCollector());
   }
 
-  if (capture.autoContext) {
-    state.collectors.push(createAutoContextCollector());
-  }
 }
 
 function buildCollectorContext(state: SdkState): CollectorContext {
@@ -547,7 +535,6 @@ export function createCrowSDK(userConfig: CrowConfig): CrowSDK {
     trackAddToCart: data => ecommerceTrackAddToCart(data),
     trackVariantSelect: data => ecommerceTrackVariantSelect(data),
     trackImageZoom: data => ecommerceTrackImageZoom(data),
-    captureProductSnapshot: snapshot => contextCaptureSnapshot(snapshot),
   };
 
   makeGloballyAvailableForDebugging(sdkInstance);

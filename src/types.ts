@@ -12,7 +12,6 @@ export interface CaptureConfig {
   interactions: boolean;
   performance: boolean;
   replay: boolean;
-  autoContext: boolean;
   sendAnalyticsEvents?: boolean;
 }
 
@@ -33,7 +32,6 @@ export type EventType =
   | 'add_to_cart'
   | 'variant_select'
   | 'image_zoom'
-  | 'context_snapshot'
   | 'performance'
   | 'web_vital'
   | 'api_error';
@@ -63,16 +61,6 @@ export interface UtmParameters {
   utm_campaign?: string;
   utm_term?: string;
   utm_content?: string;
-}
-
-export interface ProductSnapshot {
-  productId: string;
-  price?: number;
-  availability?: string;
-  shippingEstimate?: string;
-  variants?: Record<string, any>[];
-  promotions?: string[];
-  outOfStock?: boolean;
 }
 
 export interface ReplayBatchRequest {
