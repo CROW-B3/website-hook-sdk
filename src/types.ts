@@ -1,5 +1,4 @@
 export interface CrowConfig {
-  projectId: string;
   debug?: boolean;
   capture?: Partial<CaptureConfig>;
 }
@@ -15,12 +14,6 @@ export interface CaptureConfig {
   replay: boolean;
   autoContext: boolean;
   sendAnalyticsEvents?: boolean;
-}
-
-export interface User {
-  id?: string;
-  anonymousId: string;
-  traits?: Record<string, any>;
 }
 
 export interface ScreenSize {
@@ -83,7 +76,6 @@ export interface ProductSnapshot {
 }
 
 export interface ReplayBatchRequest {
-  projectId: string;
   sessionId: string;
   chunkIndex: number;
   events: any[];
@@ -96,23 +88,17 @@ export interface ReplayBatchResponse {
 }
 
 export interface TrackRequest {
-  projectId: string;
   sessionId: string;
   event: BaseEvent;
-  user?: User;
 }
 
 export interface BatchRequest {
-  projectId: string;
   sessionId: string;
   events: BaseEvent[];
-  user?: User;
 }
 
 export interface SessionStartRequest {
-  projectId: string;
   sessionId: string;
-  user: User;
   context: SessionContext;
 }
 
@@ -133,7 +119,6 @@ export interface ExitContext {
 }
 
 export interface SessionEndRequest {
-  projectId: string;
   sessionId: string;
   duration: number;
   pageViews: number;

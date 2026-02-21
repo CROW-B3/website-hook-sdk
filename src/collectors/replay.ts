@@ -21,7 +21,6 @@ export function createReplayCollector(): Collector {
 
     try {
       await ctx.apiClient.sendReplayBatch({
-        projectId: ctx.projectId,
         sessionId: ctx.sessionId,
         chunkIndex: currentChunkIndex,
         events: eventsToSend,

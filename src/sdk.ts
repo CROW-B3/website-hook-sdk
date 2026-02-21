@@ -8,7 +8,6 @@ import type {
   ProductSnapshot,
   ScreenSize,
   SessionContext,
-  User,
 } from './types';
 import type { ApiClient } from './api/client';
 import type { EventQueue } from './utils/queue';
@@ -21,7 +20,6 @@ import type {
 import { createApiClient } from './api/client';
 import {
   extendCurrentSessionExpiry,
-  getOrCreateAnonymousId,
   getOrCreateSessionId,
 } from './utils/id';
 import { createEventQueue } from './utils/queue';
@@ -65,7 +63,6 @@ const DEFAULT_BATCHING_CONFIG = {
 } as const;
 
 type InternalConfig = {
-  projectId: string;
   apiEndpoint: string;
   capture: CaptureConfig;
   batching: {
@@ -89,8 +86,6 @@ type SdkState = {
   config: InternalConfig;
   apiClient: ApiClient;
   sessionId: string;
-  anonymousId: string;
-  user: User;
   eventQueue: EventQueue | null;
   sessionStartTime: number;
   pageViewCount: number;
@@ -109,7 +104,6 @@ export type CrowSDK = {
   trackEvent: (eventType: EventType, data?: Record<string, any>) => void;
   trackPageView: (data?: Record<string, any>) => void;
   trackClick: (data?: Record<string, any>) => void;
-  identifyUser: (userId: string, traits?: Record<string, any>) => void;
   flushQueuedEvents: () => Promise<void>;
   destroySdk: () => void;
   trackAddToCart: (data: AddToCartData) => void;
@@ -125,7 +119,6 @@ function throwIfNotBrowserEnvironment(): void {
 
 function buildInternalConfig(userConfig: CrowConfig): InternalConfig {
   return {
-    projectId: userConfig.projectId,
     apiEndpoint: NEXT_BASE_URL,
     capture: {
       ...DEFAULT_CAPTURE_CONFIG,
@@ -163,9 +156,7 @@ async function sendSessionStartRequest(state: SdkState): Promise<void> {
   const sessionContext = buildSessionContext();
 
   const response = await state.apiClient.startNewSession({
-    projectId: state.config.projectId,
     sessionId: state.sessionId,
-    user: state.user,
     context: sessionContext,
   });
 
@@ -262,7 +253,6 @@ async function sendSessionEndRequest(
   const exitContext = buildExitContext(state, exitTrigger);
 
   const response = await state.apiClient.endCurrentSession({
-    projectId: state.config.projectId,
     sessionId: state.sessionId,
     duration: sessionDuration,
     pageViews: state.pageViewCount,
@@ -305,10 +295,8 @@ async function sendSingleEventToApi(
   event: BaseEvent
 ): Promise<void> {
   const response = await state.apiClient.sendTrackingEvent({
-    projectId: state.config.projectId,
     sessionId: state.sessionId,
     event,
-    user: state.user,
   });
 
   logDebugMessage(state, 'Event sent', { event, response });
@@ -321,10 +309,8 @@ async function sendBatchedEventsToApi(
   if (events.length === 0) return;
 
   const response = await state.apiClient.sendBatchedEvents({
-    projectId: state.config.projectId,
     sessionId: state.sessionId,
     events,
-    user: state.user,
   });
 
   logDebugMessage(state, 'Batch sent', { eventCount: events.length, response });
@@ -423,7 +409,6 @@ function buildCollectorContext(state: SdkState): CollectorContext {
       trackEventAndExtendSession(state, eventType, data),
     config: state.config.capture,
     sessionId: state.sessionId,
-    projectId: state.config.projectId,
     apiClient: state.apiClient,
     debug: (message: string, data?: any) => logDebugMessage(state, message, data),
   };
@@ -500,20 +485,6 @@ async function initializeSdkInternal(state: SdkState): Promise<void> {
   logDebugMessage(state, 'SDK initialization complete');
 }
 
-function updateUserIdentity(
-  state: SdkState,
-  userId: string,
-  traits?: Record<string, any>
-): void {
-  state.user = {
-    id: userId,
-    anonymousId: state.anonymousId,
-    traits,
-  };
-
-  logDebugMessage(state, 'User identified', { userId, traits });
-}
-
 async function flushAllQueuedEvents(state: SdkState): Promise<void> {
   if (!state.eventQueue) return;
   await state.eventQueue.flushAllQueuedEvents();
@@ -545,14 +516,11 @@ export function createCrowSDK(userConfig: CrowConfig): CrowSDK {
   const internalConfig = buildInternalConfig(userConfig);
   const apiClient = createApiClient(internalConfig.apiEndpoint);
   const sessionId = getOrCreateSessionId();
-  const anonymousId = getOrCreateAnonymousId();
 
   const state: SdkState = {
     config: internalConfig,
     apiClient,
     sessionId,
-    anonymousId,
-    user: { anonymousId },
     eventQueue: null,
     sessionStartTime: Date.now(),
     pageViewCount: 0,
@@ -574,7 +542,6 @@ export function createCrowSDK(userConfig: CrowConfig): CrowSDK {
       trackEventAndExtendSession(state, eventType, data),
     trackPageView: data => trackEventAndExtendSession(state, 'pageview', data),
     trackClick: data => trackEventAndExtendSession(state, 'click', data),
-    identifyUser: (userId, traits) => updateUserIdentity(state, userId, traits),
     flushQueuedEvents: async () => flushAllQueuedEvents(state),
     destroySdk: () => destroySdkAndCleanup(state),
     trackAddToCart: data => ecommerceTrackAddToCart(data),
