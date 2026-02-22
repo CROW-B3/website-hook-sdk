@@ -6,7 +6,7 @@
       "name": "@b3-crow/website-hook-sdk",
       "dependencies": {
         "ky": "^1.14.2",
-        "rrweb": "^2.0.0-alpha.17",
+        "rrweb": "2.0.0-alpha.20",
       },
       "devDependencies": {
         "@antfu/eslint-config": "^7.2.0",
