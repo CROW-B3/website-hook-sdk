@@ -44,6 +44,6 @@
   },
   "dependencies": {
     "ky": "^1.14.2",
-    "rrweb": "^2.0.0-alpha.17"
+    "rrweb": "2.0.0-alpha.20"
   }
 }
