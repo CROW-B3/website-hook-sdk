@@ -34,7 +34,22 @@ export type EventType =
   | 'image_zoom'
   | 'performance'
   | 'web_vital'
-  | 'api_error';
+  | 'api_error'
+  | 'clipboard_copy'
+  | 'clipboard_paste'
+  | 'visibility_change'
+  | 'media_play'
+  | 'media_pause'
+  | 'download'
+  | 'form_focus'
+  | 'form_blur'
+  | 'form_input'
+  | 'form_validation'
+  | 'mousemove'
+  | 'network_request'
+  | 'performance_metric'
+  | 'rrweb_snapshot'
+  | 'rrweb_incremental';
 
 export interface BaseEvent {
   type: EventType;
