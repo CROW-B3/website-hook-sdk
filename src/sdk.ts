@@ -17,10 +17,7 @@ import type {
   VariantSelectData,
 } from './collectors/ecommerce';
 import { createApiClient } from './api/client';
-import {
-  extendCurrentSessionExpiry,
-  getOrCreateSessionId,
-} from './utils/id';
+import { extendCurrentSessionExpiry, getOrCreateSessionId } from './utils/id';
 import { createEventQueue } from './utils/queue';
 import { isBrowserEnvironment } from './utils/environment';
 import { NEXT_BASE_URL } from './constants';
@@ -189,7 +186,7 @@ function buildExitContext(
     lastPageTimeSpentMs: Date.now() - state.lastPageEntryTime,
     exitTrigger: trigger,
     hadCartItems: state.hadCartItems,
-    lastInteractions: state.recentInteractions.map((i) => ({
+    lastInteractions: state.recentInteractions.map(i => ({
       type: i.type,
       timestamp: i.timestamp,
       description: i.description,
@@ -335,8 +332,12 @@ function updateEventCounters(state: SdkState, eventType: EventType): void {
   incrementInteractionCounter(state);
 }
 
+// Bandwidth optimization: matches the service's GATED_EVENT_TYPES (rage_click, scroll, navigation).
+// click is NOT gated server-side, so it must not be filtered here.
 const ANALYTICS_ONLY_EVENTS: Set<EventType> = new Set([
-  'click', 'rage_click', 'scroll', 'navigation',
+  'rage_click',
+  'scroll',
+  'navigation',
 ]);
 
 function trackEventAndExtendSession(
@@ -350,7 +351,10 @@ function trackEventAndExtendSession(
   extendCurrentSessionExpiry();
 
   // Skip sending to backend if gated
-  if (ANALYTICS_ONLY_EVENTS.has(eventType) && !state.config.capture.sendAnalyticsEvents) {
+  if (
+    ANALYTICS_ONLY_EVENTS.has(eventType) &&
+    !state.config.capture.sendAnalyticsEvents
+  ) {
     logDebugMessage(state, `Event "${eventType}" gated - not sent to backend`);
     return;
   }
@@ -388,7 +392,6 @@ function registerCollectors(state: SdkState): void {
   if (capture.replay) {
     state.collectors.push(createReplayCollector());
   }
-
 }
 
 function buildCollectorContext(state: SdkState): CollectorContext {
@@ -398,7 +401,8 @@ function buildCollectorContext(state: SdkState): CollectorContext {
     config: state.config.capture,
     sessionId: state.sessionId,
     apiClient: state.apiClient,
-    debug: (message: string, data?: any) => logDebugMessage(state, message, data),
+    debug: (message: string, data?: any) =>
+      logDebugMessage(state, message, data),
   };
 }
 
@@ -409,7 +413,10 @@ function initializeAllCollectors(state: SdkState): void {
       collector.initialize(context);
       logDebugMessage(state, `Collector "${collector.name}" initialized`);
     } catch (error) {
-      console.error(`[Crow] Failed to initialize collector "${collector.name}":`, error);
+      console.error(
+        `[Crow] Failed to initialize collector "${collector.name}":`,
+        error
+      );
     }
   }
 }
@@ -419,7 +426,10 @@ function destroyAllCollectors(state: SdkState): void {
     try {
       collector.destroy();
     } catch (error) {
-      console.error(`[Crow] Failed to destroy collector "${collector.name}":`, error);
+      console.error(
+        `[Crow] Failed to destroy collector "${collector.name}":`,
+        error
+      );
     }
   }
   state.collectors = [];
