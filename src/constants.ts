@@ -1,4 +1,5 @@
 import { getEnvironmentVariable } from './utils/environment';
 
 export const NEXT_BASE_URL =
-  getEnvironmentVariable('NEXT_PUBLIC_BE_BASE_URL') || 'http://localhost:8013';
+  getEnvironmentVariable('NEXT_PUBLIC_BE_BASE_URL') ||
+  'https://dev.internal.ingest-worker.crowai.dev';
