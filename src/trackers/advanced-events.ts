@@ -9,14 +9,15 @@ type AdvancedEventsConfig = {
 type EventCallback = (event: BaseEvent) => void;
 
 function createClipboardEvent(type: 'copy' | 'paste'): BaseEvent {
+  const eventType = type === 'copy' ? 'clipboard_copy' : 'clipboard_paste';
   return {
-    type: type === 'copy' ? 'clipboard_copy' : 'clipboard_paste',
+    type: eventType,
     timestamp: Date.now(),
     url: window.location.href,
     data: {
       action: type,
     },
-  };
+  } as BaseEvent;
 }
 
 function createVisibilityChangeEvent(): BaseEvent {
@@ -28,15 +29,16 @@ function createVisibilityChangeEvent(): BaseEvent {
       hidden: document.hidden,
       visibilityState: document.visibilityState,
     },
-  };
+  } as BaseEvent;
 }
 
 function createMediaEvent(
   type: 'play' | 'pause',
   element: HTMLMediaElement
 ): BaseEvent {
+  const eventType = type === 'play' ? 'media_play' : 'media_pause';
   return {
-    type: type === 'play' ? 'media_play' : 'media_pause',
+    type: eventType,
     timestamp: Date.now(),
     url: window.location.href,
     data: {
@@ -46,7 +48,7 @@ function createMediaEvent(
       duration: element.duration,
       src: element.currentSrc?.substring(0, 200),
     },
-  };
+  } as BaseEvent;
 }
 
 function createDownloadEvent(url: string): BaseEvent {
@@ -58,7 +60,7 @@ function createDownloadEvent(url: string): BaseEvent {
       downloadUrl: url,
       fileName: url.split('/').pop(),
     },
-  };
+  } as BaseEvent;
 }
 
 function setupClipboardTracking(onEvent: EventCallback): () => void {

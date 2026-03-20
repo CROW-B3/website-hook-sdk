@@ -93,7 +93,7 @@ function createNavigationTimingEvent(): BaseEvent {
       metricType: 'navigation_timing',
       ...getNavigationTiming(),
     },
-  };
+  } as BaseEvent;
 }
 
 function createResourceTimingEvent(): BaseEvent {
@@ -105,7 +105,7 @@ function createResourceTimingEvent(): BaseEvent {
       metricType: 'resource_timing',
       resources: getResourceTiming(),
     },
-  };
+  } as BaseEvent;
 }
 
 function createCoreWebVitalsEvent(): BaseEvent {
@@ -117,7 +117,7 @@ function createCoreWebVitalsEvent(): BaseEvent {
       metricType: 'core_web_vitals',
       ...getCoreWebVitals(),
     },
-  };
+  } as BaseEvent;
 }
 
 function setupNavigationTimingTracking(onEvent: EventCallback): () => void {

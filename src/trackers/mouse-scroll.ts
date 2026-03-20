@@ -46,7 +46,7 @@ function createMousemoveEvent(mouseEvent: MouseEvent): BaseEvent {
       pageX: mouseEvent.pageX,
       pageY: mouseEvent.pageY,
     },
-  };
+  } as BaseEvent;
 }
 
 function createScrollEvent(): BaseEvent {

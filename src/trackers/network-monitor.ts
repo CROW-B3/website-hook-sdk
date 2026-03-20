@@ -39,7 +39,7 @@ function createNetworkRequestEvent(
       status,
       duration,
     },
-  };
+  } as BaseEvent;
 }
 
 function setupFetchInterception(onEvent: EventCallback): () => void {

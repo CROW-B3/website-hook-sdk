@@ -34,7 +34,7 @@ function createFormFocusEvent(element: HTMLElement): BaseEvent {
     timestamp: Date.now(),
     url: window.location.href,
     data: getFormElementData(element),
-  };
+  } as BaseEvent;
 }
 
 function createFormBlurEvent(element: HTMLElement): BaseEvent {
@@ -43,7 +43,7 @@ function createFormBlurEvent(element: HTMLElement): BaseEvent {
     timestamp: Date.now(),
     url: window.location.href,
     data: getFormElementData(element),
-  };
+  } as BaseEvent;
 }
 
 function createFormInputEvent(element: HTMLElement): BaseEvent {
@@ -62,7 +62,7 @@ function createFormInputEvent(element: HTMLElement): BaseEvent {
       ...getFormElementData(element),
       valueLength: formElement?.value.length || 0,
     },
-  };
+  } as BaseEvent;
 }
 
 function createFormValidationEvent(
@@ -85,7 +85,7 @@ function createFormValidationEvent(
       valid: isValid,
       validationMessage: formElement?.validationMessage || undefined,
     },
-  };
+  } as BaseEvent;
 }
 
 function isFormElement(element: EventTarget | null): element is HTMLElement {

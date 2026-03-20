@@ -22,15 +22,18 @@ export function setupRRwebRecording(
       const result = rrweb.record({
         emit(event: any) {
           const isFullSnapshot = event.type === 2;
+          const eventType = isFullSnapshot
+            ? 'rrweb_snapshot'
+            : 'rrweb_incremental';
           const baseEvent: BaseEvent = {
-            type: isFullSnapshot ? 'rrweb_snapshot' : 'rrweb_incremental',
+            type: eventType,
             timestamp: event.timestamp || Date.now(),
             url: window.location.href,
             data: {
               rrwebEvent: event,
               compressed: false,
             },
-          };
+          } as BaseEvent;
           onEvent(baseEvent);
         },
         sampling: {
