@@ -146,6 +146,7 @@ async function sendSessionStartRequest(state: SdkState): Promise<void> {
 
   const response = await state.apiClient.startNewSession({
     sessionId: state.sessionId,
+    projectId: (state as any).projectId,
     context: sessionContext,
   });
 
@@ -518,12 +519,13 @@ export function createCrowSDK(userConfig: CrowConfig): CrowSDK {
   );
   const sessionId = getOrCreateSessionId();
 
-  const state: SdkState = {
+  const state: SdkState & { projectId?: string } = {
     config: internalConfig,
     apiClient,
     sessionId,
     eventQueue: null,
     sessionStartTime: Date.now(),
+    projectId: userConfig.projectId,
     pageViewCount: 0,
     interactionCount: 0,
     isInitialized: false,

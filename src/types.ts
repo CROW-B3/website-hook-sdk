@@ -1,5 +1,6 @@
 export interface CrowConfig {
   apiKey?: string;
+  projectId?: string;
   ingestUrl?: string;
   debug?: boolean;
   capture?: Partial<CaptureConfig>;
@@ -104,6 +105,7 @@ export interface BatchRequest {
 
 export interface SessionStartRequest {
   sessionId: string;
+  projectId?: string;
   context: SessionContext;
 }
 
