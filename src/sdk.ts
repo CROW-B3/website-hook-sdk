@@ -108,7 +108,7 @@ function throwIfNotBrowserEnvironment(): void {
 
 function buildInternalConfig(userConfig: CrowConfig): InternalConfig {
   return {
-    apiEndpoint: NEXT_BASE_URL,
+    apiEndpoint: userConfig.ingestUrl ?? NEXT_BASE_URL,
     capture: {
       ...DEFAULT_CAPTURE_CONFIG,
       ...userConfig.capture,
@@ -512,7 +512,10 @@ export function createCrowSDK(userConfig: CrowConfig): CrowSDK {
   throwIfNotBrowserEnvironment();
 
   const internalConfig = buildInternalConfig(userConfig);
-  const apiClient = createApiClient(internalConfig.apiEndpoint);
+  const apiClient = createApiClient(
+    internalConfig.apiEndpoint,
+    userConfig.apiKey
+  );
   const sessionId = getOrCreateSessionId();
 
   const state: SdkState = {

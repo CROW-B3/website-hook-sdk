@@ -23,7 +23,7 @@ export type ApiClient = {
   sendReplayBatch: (data: ReplayBatchRequest) => Promise<ReplayBatchResponse>;
 };
 
-function createHttpClient(baseUrl: string) {
+function createHttpClient(baseUrl: string, apiKey?: string) {
   return ky.create({
     prefixUrl: baseUrl,
     timeout: TEN_SECONDS_TIMEOUT_MS,
@@ -32,6 +32,7 @@ function createHttpClient(baseUrl: string) {
       methods: ['post'],
       statusCodes: RETRYABLE_HTTP_STATUS_CODES,
     },
+    ...(apiKey ? { headers: { Authorization: `Bearer ${apiKey}` } } : {}),
   });
 }
 
@@ -110,8 +111,8 @@ async function sendReplayBatchRequest(
   }
 }
 
-export function createApiClient(baseUrl: string): ApiClient {
-  const httpClient = createHttpClient(baseUrl);
+export function createApiClient(baseUrl: string, apiKey?: string): ApiClient {
+  const httpClient = createHttpClient(baseUrl, apiKey);
 
   return {
     sendTrackingEvent: async (data: TrackRequest) =>

@@ -1,4 +1,6 @@
 export interface CrowConfig {
+  apiKey?: string;
+  ingestUrl?: string;
   debug?: boolean;
   capture?: Partial<CaptureConfig>;
 }
