@@ -25,7 +25,7 @@ jobs:
         uses: AndreasAugustin/actions-template-sync@v2
         with:
           git_user_name: Methika Fernando
-          git_user_email: methikafernando2006@gmail.com
+          git_user_email: noreply@crowai.dev
           source_gh_token: ${{ secrets.GH_TOKEN }}
           target_gh_token: ${{ secrets.GH_TOKEN }}
           source_repo_path: CROW-B3/npm-sdk-template
