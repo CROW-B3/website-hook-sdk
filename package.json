@@ -11,7 +11,7 @@
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "bunx prettier src/ --write",
-    "prepare": "husky install",
+    "prepare": "husky install || true && npm run build",
     "lint-staged": "lint-staged"
   },
   "repository": {
