@@ -25,7 +25,7 @@
   "license": "MIT",
   "devDependencies": {
     "@antfu/eslint-config": "^7.2.0",
-    "@commitlint/config-conventional": "^20.3.0",
+    "@commitlint/config-conventional": "^21.1.0",
     "@types/node": "^25.0.3",
     "commitlint": "^20.3.0",
     "husky": "^9.1.7",
